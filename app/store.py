@@ -169,10 +169,19 @@ class Store:
         product_id: str, product_name: str, amount: str, currency: str,
     ) -> int:
         now = time.time()
-        # Cancel any other open order for this chat to avoid ambiguity.
+        # Release stock held by this chat's prior open orders, then cancel them.
+        # (Prevents a user spamming /buy from stranding inventory in reservations.)
+        self._conn.execute(
+            "UPDATE stock SET state='available', order_id=NULL, reserved_at=NULL "
+            "WHERE state='reserved' AND order_id IN ("
+            "  SELECT id FROM orders WHERE chat_id=? "
+            "  AND state NOT IN ('paid','paid_no_stock','failed','cancelled','expired'))",
+            (chat_id,),
+        )
         self._conn.execute(
             "UPDATE orders SET state='cancelled', updated_at=? "
-            "WHERE chat_id=? AND state NOT IN ('paid','failed','cancelled')",
+            "WHERE chat_id=? AND state NOT IN "
+            "('paid','paid_no_stock','failed','cancelled','expired')",
             (now, chat_id),
         )
         cur = self._conn.execute(

@@ -164,6 +164,7 @@ async def main():
         support_contact="support@acme.co", terms_url="",
         stripe_poll_interval=8, stripe_session_timeout=1800,
         stripe_enabled=True, payments_enabled=True,
+        rate_limit_per_min=15, max_input_chars=1000,
     )
     gateway = FakeGateway()
     flow = CheckoutFlow(cfg, store, gateway)

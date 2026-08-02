@@ -72,6 +72,9 @@ class Config:
     disclosure_enabled: bool
     disclosure_text: str
     refund_policy: str
+    # Abuse protection (public bot)
+    rate_limit_per_min: int
+    max_input_chars: int
     support_contact: str
     terms_url: str
     # Payments
@@ -144,6 +147,8 @@ class Config:
                 "defective or you never received it — in that case you get a full "
                 "refund. Just reach out and we'll sort it out.",
             ),
+            rate_limit_per_min=_get_int("RATE_LIMIT_PER_MIN", 15),
+            max_input_chars=_get_int("MAX_INPUT_CHARS", 1000),
             support_contact=_get("SUPPORT_CONTACT"),
             terms_url=_get("TERMS_URL"),
             payment_providers=[

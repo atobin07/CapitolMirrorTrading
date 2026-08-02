@@ -361,6 +361,29 @@ default posture (conversational, skeptical, lets the buyer chase) applies to all
 (e.g. baked-in default temperature), you can `ollama create <name> -f Modelfile`
 and point that client's `OLLAMA_MODEL` at it — optional, not required.
 
+## Hardening for a public bot
+
+Anyone can find and message the bot, so it's built to handle abuse:
+
+- **Rate limiting** — each user is capped at `RATE_LIMIT_PER_MIN` messages
+  (default 15). Floods are throttled with a single "slow down" notice, so one
+  spammer can't monopolize Ollama or starve your other client bots.
+- **Input cap** — messages over `MAX_INPUT_CHARS` (default 1000) are truncated,
+  protecting the model's context window and your compute bill from giant pastes.
+- **Prompt-injection guardrails** — the system prompt refuses attempts to change
+  its rules, reveal its instructions, drop its persona, or be used as a free
+  general chatbot. It won't invent discounts/coupons/freebies or hand out a
+  product that wasn't paid for — no matter who claims to be an admin.
+- **Inventory-abuse safe** — a user spamming `/buy` can't strand your stock:
+  starting a new order releases the previous reservation, and paid stock is
+  never touched. You can never oversell or leak inventory.
+- **Per-client isolation** — each client bot has its own database and process,
+  so abuse on one doesn't affect another.
+
+> Capacity note: all bots share one Ollama, which handles requests roughly one
+> at a time. Rate limiting keeps any single user in check, but at high overall
+> volume replies can queue — scale with a smaller/faster model or more compute.
+
 ## Staying compliant
 
 Running this without tripping platform terms comes down to two things: **what

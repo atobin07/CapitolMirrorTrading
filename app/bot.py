@@ -17,6 +17,7 @@ from app import humanize
 from app.checkout_flow import CheckoutFlow
 from app.config import Config
 from app.ollama_client import OllamaClient, OllamaError
+from app.ratelimit import RateLimiter
 from app.payments import build_verifiers
 from app.payments.stripe_gateway import StripeGateway
 from app.payments_flow import PaymentFlow
@@ -37,6 +38,7 @@ ollama: OllamaClient
 system_prompt: str
 payment_flow: PaymentFlow | None = None
 checkout_flow: CheckoutFlow | None = None
+rate_limiter: RateLimiter | None = None
 
 
 def _display_name(update: Update) -> tuple[str, str]:
@@ -142,6 +144,21 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     user_text = update.message.text.strip()
     username, full_name = _display_name(update)
 
+    # Cap oversized input (protects context window + compute cost).
+    if len(user_text) > cfg.max_input_chars:
+        user_text = user_text[: cfg.max_input_chars]
+
+    # Rate-limit floods so one user can't choke Ollama (and the other bots).
+    if rate_limiter is not None:
+        allowed, should_warn = rate_limiter.check(chat_id)
+        rate_limiter.cleanup()
+        if not allowed:
+            if should_warn:
+                await update.message.reply_text(
+                    "getting a lot at once — give me a sec and try again 🙏"
+                )
+            return
+
     # Compliance: disclose once, before the first real exchange.
     await _maybe_disclose(chat_id, context)
 
@@ -203,8 +220,9 @@ async def _post_shutdown(app: Application) -> None:
 
 
 def main() -> None:
-    global cfg, store, ollama, system_prompt, payment_flow, checkout_flow
+    global cfg, store, ollama, system_prompt, payment_flow, checkout_flow, rate_limiter
     cfg = Config.load()
+    rate_limiter = RateLimiter(cfg.rate_limit_per_min)
 
     problems = cfg.validate()
     for p in problems:

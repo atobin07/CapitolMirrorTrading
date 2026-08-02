@@ -16,6 +16,7 @@ SUITES = [
     ("Checkout (Stripe + inventory + delivery)", "tests.test_checkout"),
     ("Humanize (persona, bubbles, typing)", "tests.test_humanize"),
     ("Compliance (disclosure, terms, honesty)", "tests.test_compliance"),
+    ("Abuse protection (rate limit, injection)", "tests.test_abuse"),
     ("End-to-end (full purchase, real code)", "tests.test_e2e"),
 ]
 
