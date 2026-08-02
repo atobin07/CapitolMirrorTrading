@@ -82,6 +82,31 @@ python run.py stock                          # show counts
 *not* used here — they have no verification API and can't be autonomous (see the
 manual-provider flow below if you still want them).
 
+## Proof it works
+
+Run the whole test suite — including a full end-to-end purchase through the real
+bot code — with one command:
+
+```bash
+python run.py test
+```
+
+```
+### Payments (PayPal/Square/manual, ledger)      ALL 23 CHECKS PASSED
+### Checkout (Stripe + inventory + delivery)      ALL 26 CHECKS PASSED
+### Humanize (persona, bubbles, typing)           ALL 20 CHECKS PASSED
+### Compliance (disclosure, terms, honesty)       ALL 11 CHECKS PASSED
+### End-to-end (full purchase, real code)         ALL 16 CHECKS PASSED
+#  ✅ ALL SUITES PASSED
+```
+
+The end-to-end suite (`tests/test_e2e.py`) runs an actual conversation →
+`/buy` → Stripe checkout → payment → **unique item delivered from inventory**,
+using the real disclosure, persona, humanizer, checkout, reservation, and
+double-spend code. Only the three external network services (Telegram, Stripe,
+Ollama) are faked — on the droplet you swap in real creds and nothing else
+changes. It prints the full customer/seller transcript so you can see it happen.
+
 ## What it does
 
 - 💬 **Natural sales conversations** — the LLM plays a friendly, on-brand seller.

@@ -17,6 +17,9 @@ def main() -> None:
     if arg == "stock":
         from app.stock_cli import main as stock_main
         raise SystemExit(stock_main(sys.argv[2:]))
+    if arg in ("test", "tests", "proof"):
+        from tests.run_all import main as test_main
+        raise SystemExit(test_main())
     from app.bot import main as bot_main
     bot_main()
 
