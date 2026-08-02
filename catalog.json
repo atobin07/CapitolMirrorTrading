@@ -1,0 +1,43 @@
+{
+  "currency": "USD",
+  "products": [
+    {
+      "id": "starter",
+      "name": "Starter Package",
+      "price": 49,
+      "summary": "Perfect for first-time buyers who want to try things out.",
+      "details": "Includes the core offering, email support, and a 7-day money-back guarantee.",
+      "link": ""
+    },
+    {
+      "id": "pro",
+      "name": "Pro Package",
+      "price": 149,
+      "summary": "Our most popular option — best value for serious buyers.",
+      "details": "Everything in Starter, plus priority support, advanced features, and onboarding help.",
+      "link": ""
+    },
+    {
+      "id": "premium",
+      "name": "Premium Package",
+      "price": 399,
+      "summary": "For buyers who want the complete, done-for-you experience.",
+      "details": "Everything in Pro, plus a 1-on-1 setup call, custom configuration, and 30 days of hands-on support.",
+      "link": ""
+    }
+  ],
+  "faq": [
+    {
+      "q": "Do you offer refunds?",
+      "a": "Yes — every package comes with a 7-day money-back guarantee, no questions asked."
+    },
+    {
+      "q": "How do I pay?",
+      "a": "Once you decide, I'll send you a secure checkout link. It only takes a minute."
+    },
+    {
+      "q": "How fast do I get access?",
+      "a": "Access is delivered immediately after payment is confirmed."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+# systemd unit to run the bot 24/7 on your droplet.
+# 1. Edit the paths/user below to match your droplet.
+# 2. sudo cp deploy/salesbot.service /etc/systemd/system/salesbot.service
+# 3. sudo systemctl daemon-reload && sudo systemctl enable --now salesbot
+# 4. Logs: journalctl -u salesbot -f
+
+[Unit]
+Description=Telegram Sales Bot (Ollama)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Change to the user you deploy as (not root, ideally).
+User=salesbot
+WorkingDirectory=/opt/salesbot
+# Use the venv's python so dependencies are found.
+ExecStart=/opt/salesbot/.venv/bin/python /opt/salesbot/run.py
+Restart=on-failure
+RestartSec=5
+# Load secrets from the .env file (systemd reads KEY=VALUE lines).
+EnvironmentFile=/opt/salesbot/.env
+
+[Install]
+WantedBy=multi-user.target

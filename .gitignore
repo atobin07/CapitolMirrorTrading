@@ -1,0 +1,15 @@
+# Secrets & local config
+.env
+
+# Data / runtime
+data/*.db
+data/*.db-journal
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
