@@ -11,11 +11,46 @@ from each client's persona + catalog, not from retraining the model.
 """
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _intake(name: str, slug: str) -> str:
+    return f"""# Client intake — {name}
+
+Collect these FROM THE CLIENT before turning on their bot, then put them into
+clients/{slug}/{slug}.env (and their products into catalog.json).
+
+## Required to run
+- [ ] Telegram bot token         -> TELEGRAM_BOT_TOKEN   (from @BotFather)
+- [ ] Ollama model to use         -> OLLAMA_MODEL          (from `ollama list`)
+- [ ] Products + prices           -> clients/{slug}/catalog.json
+- [ ] Digital inventory to sell   -> load with:
+        python run.py --env clients/{slug}/{slug}.env stock <product_id> keys.txt
+- [ ] Who gets sale alerts (numeric Telegram id) -> SELLER_CHAT_IDS
+
+## Payments — money settles to the CLIENT's OWN accounts
+The client is the merchant of record. Collect their processor keys:
+- [ ] Stripe secret key (sk_live_...)  -> STRIPE_SECRET_KEY   (Cash App + cards)
+- [ ] PayPal Client ID                 -> PAYPAL_CLIENT_ID    (PayPal + Venmo)
+- [ ] PayPal Secret                    -> PAYPAL_SECRET
+
+## Branding / voice
+- [ ] Business name        -> BUSINESS_NAME
+- [ ] Persona name + style -> PERSONA_NAME / PERSONA_STYLE
+- [ ] Support contact      -> SUPPORT_CONTACT   (their email/handle for disputes)
+- [ ] Refund policy        -> REFUND_POLICY
+
+## Handle with care
+- {slug}.env holds LIVE payment keys. It's git-ignored and set to owner-only
+  (chmod 600). Never share it, paste it, or commit it.
+- The client owns their products, refunds, taxes, and chargebacks — you provide
+  the software.
+"""
 
 
 def slugify(name: str) -> str:
@@ -86,8 +121,16 @@ def main(argv: list[str]) -> int:
     catalog = template.read_text(encoding="utf-8") if template.exists() else "{}"
     (base / "catalog.json").write_text(catalog, encoding="utf-8")
 
-    # Per-client env.
-    (base / f"{slug}.env").write_text(_build_env(name, slug), encoding="utf-8")
+    # Per-client env (holds live payment keys → owner-only permissions).
+    env_path = base / f"{slug}.env"
+    env_path.write_text(_build_env(name, slug), encoding="utf-8")
+    try:
+        os.chmod(env_path, 0o600)
+    except OSError:
+        pass
+
+    # Intake checklist of what to collect from the client.
+    (base / "INTAKE.md").write_text(_intake(name, slug), encoding="utf-8")
 
     # Ready-to-install systemd unit.
     (base / f"salesbot-{slug}.service").write_text(
@@ -98,12 +141,13 @@ def main(argv: list[str]) -> int:
     print(f"""
 ✅ Created {rel}/ for "{name}"
 
-   {rel}/{slug}.env               ← its token, persona, Stripe key, paths
+   {rel}/{slug}.env               ← its token, persona, Stripe/PayPal keys (chmod 600)
    {rel}/catalog.json            ← its products
+   {rel}/INTAKE.md               ← checklist of what to collect from the client
    {rel}/data/                   ← its own database
    {rel}/salesbot-{slug}.service ← its 24/7 service
 
-Next:
+Collect the client's details (see {rel}/INTAKE.md), then:
   1. Edit its config:
        nano {rel}/{slug}.env        (Telegram token, OLLAMA_MODEL, persona…)
        nano {rel}/catalog.json      (this client's products)
