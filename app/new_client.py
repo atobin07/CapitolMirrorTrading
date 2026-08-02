@@ -26,12 +26,16 @@ Collect these FROM THE CLIENT before turning on their bot, then put them into
 clients/{slug}/{slug}.env (and their products into catalog.json).
 
 ## Required to run
-- [ ] Telegram bot token         -> TELEGRAM_BOT_TOKEN   (from @BotFather)
+- [ ] Telegram bot token         -> TELEGRAM_BOT_TOKEN
+        The CLIENT creates the bot via @BotFather and keeps ownership; they
+        give you the token to run it. (If they leave, they revoke it.)
 - [ ] Ollama model to use         -> OLLAMA_MODEL          (from `ollama list`)
 - [ ] Products + prices           -> clients/{slug}/catalog.json
 - [ ] Digital inventory to sell   -> load with:
         python run.py --env clients/{slug}/{slug}.env stock <product_id> keys.txt
-- [ ] Who gets sale alerts (numeric Telegram id) -> SELLER_CHAT_IDS
+- [ ] Sale alerts -> SELLER_CHAT_IDS = <client's id>,<your id>  (both, comma-sep)
+        Both get 💰 alerts. NOTE: this list also grants /stock, /orders, /leads,
+        so both parties can see inventory + orders. Drop one id to restrict.
 
 ## Payments — money settles to the CLIENT's OWN accounts
 The client is the merchant of record. Collect their processor keys:
