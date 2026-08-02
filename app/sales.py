@@ -11,7 +11,12 @@ def format_price(amount, currency: str) -> str:
     return f"{amount} {currency}"
 
 
-def build_system_prompt(business_name: str, catalog: dict, checkout_url: str) -> str:
+def build_system_prompt(
+    business_name: str,
+    catalog: dict,
+    checkout_url: str,
+    payment_methods: list[str] | None = None,
+) -> str:
     currency = catalog.get("currency", "USD")
     lines: list[str] = []
 
@@ -55,7 +60,15 @@ def build_system_prompt(business_name: str, catalog: dict, checkout_url: str) ->
         "- When the customer shows they want to buy, enthusiastically confirm "
         "their choice and move them to checkout."
     )
-    if checkout_url:
+    if payment_methods:
+        methods = ", ".join(payment_methods)
+        lines.append(
+            f"- To complete a purchase, tell the customer to tap /buy — they can "
+            f"pay by {methods}, and the payment is confirmed automatically. Do NOT "
+            "ask for payment IDs, card numbers, or confirm payments yourself; the "
+            "/buy flow handles all of that securely."
+        )
+    elif checkout_url:
         lines.append(
             f"- To complete a purchase, share this checkout link: {checkout_url}"
         )

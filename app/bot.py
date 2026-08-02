@@ -15,6 +15,8 @@ from telegram.ext import (
 
 from app.config import Config
 from app.ollama_client import OllamaClient, OllamaError
+from app.payments import build_verifiers
+from app.payments_flow import PaymentFlow
 from app.sales import build_system_prompt, detect_buying_signal
 from app.store import Store
 
@@ -30,6 +32,7 @@ cfg: Config
 store: Store
 ollama: OllamaClient
 system_prompt: str
+payment_flow: PaymentFlow | None = None
 
 
 def _display_name(update: Update) -> tuple[str, str]:
@@ -50,8 +53,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    buy_line = "/buy – see products and pay\n" if cfg.payments_enabled else ""
     await update.message.reply_text(
         "Just chat with me naturally — tell me what you need and I'll help.\n\n"
+        f"{buy_line}"
         "/start – restart our conversation\n"
         "/help – show this message"
     )
@@ -100,6 +105,12 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     user_text = update.message.text.strip()
     username, full_name = _display_name(update)
 
+    # If the customer is mid-checkout and owes us a payment ID, that takes
+    # priority over the LLM — money handling is deterministic, never AI-driven.
+    if payment_flow is not None:
+        if await payment_flow.maybe_handle_payment_id(update, context):
+            return
+
     await context.bot.send_chat_action(chat_id, ChatAction.TYPING)
 
     history = store.get_history(chat_id)
@@ -142,11 +153,13 @@ async def _post_init(app: Application) -> None:
 
 async def _post_shutdown(app: Application) -> None:
     await ollama.close()
+    if payment_flow is not None:
+        await payment_flow.close()
     store.close()
 
 
 def main() -> None:
-    global cfg, store, ollama, system_prompt
+    global cfg, store, ollama, system_prompt, payment_flow
     cfg = Config.load()
 
     problems = cfg.validate()
@@ -166,8 +179,13 @@ def main() -> None:
         num_ctx=cfg.ollama_num_ctx,
         timeout=cfg.ollama_timeout,
     )
+    verifiers = build_verifiers(cfg) if cfg.payments_enabled else {}
+    payment_flow = PaymentFlow(cfg, store, verifiers) if verifiers else None
+    payment_labels = [v.label for v in verifiers.values()]
+
     system_prompt = build_system_prompt(
-        cfg.business_name, cfg.catalog, cfg.checkout_url
+        cfg.business_name, cfg.catalog, cfg.checkout_url,
+        payment_methods=payment_labels,
     )
 
     app = (
@@ -181,6 +199,8 @@ def main() -> None:
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("reset", reset_cmd))
     app.add_handler(CommandHandler("leads", leads_cmd))
+    if payment_flow is not None:
+        payment_flow.register(app)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
 
     log.info("Starting %s sales bot…", cfg.business_name)

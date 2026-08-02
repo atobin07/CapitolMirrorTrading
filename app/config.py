@@ -55,7 +55,22 @@ class Config:
     business_name: str
     checkout_url: str
     database_path: str
+    # Payments
+    payment_providers: list[str]
+    paypal_env: str
+    paypal_client_id: str
+    paypal_secret: str
+    paypal_me: str
+    square_env: str
+    square_access_token: str
+    cashapp_cashtag: str
+    applepay_link: str
+    venmo_handle: str
     catalog: dict = field(default_factory=dict)
+
+    @property
+    def payments_enabled(self) -> bool:
+        return bool(self.payment_providers)
 
     @classmethod
     def load(cls) -> "Config":
@@ -79,6 +94,20 @@ class Config:
             business_name=_get("BUSINESS_NAME", "Your Business"),
             checkout_url=_get("CHECKOUT_URL"),
             database_path=db_path,
+            payment_providers=[
+                p.strip().lower()
+                for p in _get("PAYMENT_PROVIDERS").replace(";", ",").split(",")
+                if p.strip()
+            ],
+            paypal_env=(_get("PAYPAL_ENV", "live") or "live").lower(),
+            paypal_client_id=_get("PAYPAL_CLIENT_ID"),
+            paypal_secret=_get("PAYPAL_SECRET"),
+            paypal_me=_get("PAYPAL_ME"),
+            square_env=(_get("SQUARE_ENV", "production") or "production").lower(),
+            square_access_token=_get("SQUARE_ACCESS_TOKEN"),
+            cashapp_cashtag=_get("CASHAPP_CASHTAG"),
+            applepay_link=_get("APPLEPAY_LINK"),
+            venmo_handle=_get("VENMO_HANDLE"),
             catalog=catalog,
         )
 

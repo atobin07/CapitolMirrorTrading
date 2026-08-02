@@ -27,10 +27,12 @@ Customer ──▶ Telegram ──▶ bot (this repo) ──▶ Ollama (your dro
 
 | Command  | Who       | What                                    |
 |----------|-----------|-----------------------------------------|
-| `/start` | anyone    | Greeting + restart the conversation     |
-| `/help`  | anyone    | How to use the bot                      |
-| `/reset` | anyone    | Clear conversation memory               |
-| `/leads` | you only  | List recent captured leads              |
+| `/start`  | anyone    | Greeting + restart the conversation    |
+| `/help`   | anyone    | How to use the bot                     |
+| `/reset`  | anyone    | Clear conversation memory              |
+| `/buy`    | anyone    | Pick a product and pay (if enabled)    |
+| `/leads`  | you only  | List recent captured leads             |
+| `/orders` | you only  | List recent orders + their status      |
 
 ---
 
@@ -112,6 +114,96 @@ journalctl -u salesbot -f        # live logs
 
 ---
 
+## Accepting & verifying payments
+
+The bot can take payment and **verify the payment ID before delivering**. Turn
+it on by listing methods in `PAYMENT_PROVIDERS` (e.g. `paypal,cashapp,applepay,venmo`).
+
+### The buy flow
+
+```
+Customer: /buy
+  → picks a product      (buttons)
+  → picks how to pay     (buttons: only the methods you enabled)
+  → gets pay instructions + your handle/link
+  → pays, then sends the payment/transaction ID
+  → bot verifies it ──┬─ verified ────────────▶ delivers + pings you
+                      └─ can't auto-verify ───▶ you get Approve/Reject buttons
+```
+
+Money handling is **deterministic and button-driven** — the LLM sells, but it
+**never** decides that a payment is valid. Verification happens only through the
+provider's API or your explicit approval.
+
+### What can actually be verified (read this)
+
+Not all of these have a public API. Here's the honest picture:
+
+| Method | Auto-verify? | How |
+|---|---|---|
+| **PayPal** | ✅ Yes | Official REST API — checks status, amount, currency, payer. |
+| **Cash App** | ⚠️ Via **Square** only | Square "Cash App Pay" → Square Payments API. A personal `$cashtag` P2P payment has **no public API**. |
+| **Apple Pay** | ⚠️ Via a **processor** only | Apple Pay is a card wallet, not a P2P app. Verified through Square (Payments API). Apple *Cash* (iMessage P2P) has **no API**. |
+| **Venmo** | ❌ No public API | Personal Venmo can't be verified programmatically — routed to **you** to approve. |
+
+When a method has no API (personal Cash App, Venmo, Apple Cash, or when you
+haven't added API keys), the bot **still captures the payment ID** and asks
+**you** to Approve/Reject in Telegram. Nothing is delivered until you confirm.
+
+> ⚠️ Anyone offering to "verify Venmo/Cash App payment IDs" without a merchant
+> account is either scraping (breaks ToS, breaks often) or just trusting what the
+> buyer types. This bot doesn't pretend — it verifies what's verifiable and puts
+> a human in the loop for the rest.
+
+### Built-in safeguards
+
+- **Double-spend ledger** — every accepted payment ID is recorded; the same ID
+  can't be reused on another order (checked before the API call *and* atomically
+  on approval).
+- **Amount + currency match** — a payment for the wrong amount/currency is never
+  auto-accepted; it goes to you for review.
+- **Human-in-the-loop** — mismatches, reused IDs, and no-API methods all require
+  your tap before anything ships.
+
+### Setup per method
+
+**PayPal (real verification):**
+1. Create REST API credentials at
+   <https://developer.paypal.com/dashboard/applications>.
+2. On that app, enable **Transaction Search** (so PayPal.me / received payments
+   can be looked up).
+3. Set `PAYPAL_CLIENT_ID`, `PAYPAL_SECRET`, `PAYPAL_ENV=live`, and optionally
+   `PAYPAL_ME` (your paypal.me handle, used to build a pay link).
+
+**Cash App / Apple Pay (via Square):**
+1. Create a Square app at <https://developer.squareup.com/apps> and copy the
+   **Access Token**.
+2. Set `SQUARE_ACCESS_TOKEN` and `SQUARE_ENV=production`.
+3. For Cash App, set your `$cashtag` in `CASHAPP_CASHTAG`.
+4. For Apple Pay, give customers a Square payment link in `APPLEPAY_LINK`
+   (or reuse `CHECKOUT_URL`).
+
+**Venmo (human-verified):**
+- Just set `VENMO_HANDLE`. You'll approve each payment in Telegram.
+
+### Auto-delivery
+
+Give a product a `"deliverable"` in `catalog.json` (a license key, a link, a
+download, instructions). On a confirmed payment the bot DMs it to the buyer
+automatically. Leave it empty and the bot just tells the buyer you'll set them
+up, and pings you to fulfill.
+
+### Before you take real money
+
+- **Fees & accounts:** PayPal/Square charge processing fees and may require a
+  business account. P2P methods (personal Venmo/Cash App) aren't meant for
+  business sales and can freeze accounts — use the merchant options for volume.
+- **Keep a human check for large orders.** The Approve/Reject flow is there for
+  exactly this.
+- **Comply with the providers' terms** and your local tax/consumer rules.
+
+---
+
 ## Tuning for more sales
 
 - **Catalog copy matters most.** Punchy `summary` lines and clear `details`
@@ -133,10 +225,18 @@ app/
   config.py         # loads .env + catalog.json
   ollama_client.py  # async Ollama chat client
   sales.py          # system prompt + buying-signal detection
-  store.py          # SQLite: conversations + leads
-catalog.json        # YOUR products / prices / FAQ  ← edit this
+  store.py          # SQLite: conversations, leads, orders, payment ledger
+  payments_flow.py  # /buy → pay → verify → deliver (button-driven)
+  payments/
+    base.py         # verifier interface + result type
+    paypal.py       # PayPal REST verification
+    square.py       # Cash App Pay + Apple Pay (Square Payments API)
+    manual.py       # human-approved fallback (Venmo, P2P Cash App)
+    registry.py     # builds active verifiers from config
+catalog.json        # YOUR products / prices / FAQ / deliverables  ← edit this
 .env.example        # config template  → copy to .env
 run.py              # entry point:  python run.py
+tests/test_payments.py    # payment verification tests (mocked HTTP)
 deploy/salesbot.service   # systemd unit for 24/7 running
 ```
 
