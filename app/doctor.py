@@ -117,7 +117,46 @@ def _check_sellers(cfg: Config) -> bool:
     return True
 
 
+async def _check_stripe(cfg: Config) -> bool:
+    from app.payments.stripe_gateway import StripeGateway
+    gw = StripeGateway(cfg.stripe_secret_key)
+    try:
+        ok, detail = await gw.ping()
+    finally:
+        await gw.close()
+    if ok:
+        _ok("Stripe key", detail)
+        if gw.live:
+            pass
+        else:
+            _warn("Stripe mode", "TEST key — real cards won't be charged. "
+                  "Use sk_live_… to take real money.")
+        return True
+    _fail("Stripe key", f"Stripe rejected the key ({detail}). "
+          "Check STRIPE_SECRET_KEY (starts with sk_live_ or sk_test_).")
+    return False
+
+
+def _check_inventory(store, cfg: Config) -> None:
+    products = cfg.catalog.get("products", [])
+    if not products:
+        return
+    empties = []
+    for p in products:
+        n = store.available_count(str(p["id"]))
+        if n <= 0:
+            empties.append(p["name"])
+        else:
+            _ok(f"Stock: {p['name']}", f"{n} available")
+    for name in empties:
+        _warn(f"Stock: {name}", "0 available — load with "
+              "`python run.py stock <id> <file.txt>` or it'll show as sold out.")
+
+
 def _check_payments(cfg: Config) -> bool:
+    if cfg.stripe_enabled:
+        # Stripe check is handled separately (async) in run_checks.
+        return True
     if not cfg.payments_enabled:
         _warn("Payments", "disabled (PAYMENT_PROVIDERS empty). Bot sells + hands "
               "leads to you; no in-chat checkout.")
@@ -152,10 +191,20 @@ async def run_checks() -> int:
     _check_sellers(cfg)
 
     print("\nPayments")
-    _check_payments(cfg)
+    stripe_ok = True
+    if cfg.stripe_enabled:
+        stripe_ok = await _check_stripe(cfg)
+        from app.store import Store
+        store = Store(cfg.database_path)
+        try:
+            _check_inventory(store, cfg)
+        finally:
+            store.close()
+    else:
+        _check_payments(cfg)
 
     print("\n" + "─" * 44)
-    essential = tg and ol and cat
+    essential = tg and ol and cat and stripe_ok
     if essential:
         print(f"{GREEN}Ready to sell.{END} Start it with:  python run.py\n")
         return 0

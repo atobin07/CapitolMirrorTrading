@@ -42,6 +42,46 @@ Telegram  ──(long-polling)──▶  bot (run.py)
   model pulled, and your `catalog.json`. `python run.py --check` confirms all
   three are connected before you go live.
 
+## Fully autonomous mode (Stripe + inventory) ⭐
+
+Set `STRIPE_SECRET_KEY` and the bot runs **end-to-end with zero human touch**:
+
+```
+Customer: /buy
+  → picks a product (sold-out items are marked)
+  → bot RESERVES one item from inventory  (so you never oversell)
+  → bot creates a Stripe checkout link (card / Apple Pay / Cash App Pay)
+  → customer pays
+  → bot POLLS Stripe in the background until paid   (no webhook/domain needed)
+  → bot pulls that reserved item from the database and DELIVERS it instantly
+  → you get a "💰 Sale" notification with stock remaining
+```
+
+No paste-your-ID step, no Approve/Reject, no manual fulfillment. Payment is
+verified by Stripe's API; delivery comes straight from your inventory DB.
+
+**Why it's safe to run unattended:**
+- **No oversell** — an item is reserved at checkout; if payment expires, it's
+  released back to stock automatically.
+- **No double-charge delivery** — each Stripe payment is claimed once in a
+  ledger; repeated poll ticks are no-ops.
+- **Restart-proof** — the poller reconciles from the database on startup, so a
+  reboot mid-checkout still delivers once payment clears.
+- **Never delivers nothing** — because stock is reserved up front, a paid order
+  always has an item; the one impossible edge case is caught and flagged to you.
+
+**Loading inventory** (one deliverable per line — keys, accounts, links):
+```bash
+python run.py stock <product_id> keys.txt   # add items
+python run.py stock                          # show counts
+# or in Telegram (seller only):  /stock
+```
+
+**Requirements for true autonomy:** a Stripe account, and products that are
+**digitally deliverable** from that stock list. Venmo / personal Cash App are
+*not* used here — they have no verification API and can't be autonomous (see the
+manual-provider flow below if you still want them).
+
 ## What it does
 
 - 💬 **Natural sales conversations** — the LLM plays a friendly, on-brand seller.
@@ -64,6 +104,7 @@ Telegram  ──(long-polling)──▶  bot (run.py)
 | `/buy`    | anyone    | Pick a product and pay (if enabled)    |
 | `/leads`  | you only  | List recent captured leads             |
 | `/orders` | you only  | List recent orders + their status      |
+| `/stock`  | you only  | Show inventory counts per product      |
 
 ---
 
@@ -132,8 +173,16 @@ This file is the single source of truth the bot sells from.
 python run.py --check
 ```
 
-You'll get a pass/fail checklist with the exact fix for anything broken. Once
-it says *Ready to sell*, start the bot:
+You'll get a pass/fail checklist with the exact fix for anything broken —
+including Stripe connectivity and per-product stock levels.
+
+**If you're using autonomous mode, load your inventory** (one item per line):
+
+```bash
+python run.py stock pro pro_keys.txt
+```
+
+Once `--check` says *Ready to sell*, start the bot:
 
 ```bash
 python run.py
@@ -266,18 +315,22 @@ app/
   ollama_client.py  # async Ollama chat client
   sales.py          # system prompt + buying-signal detection
   store.py          # SQLite: conversations, leads, orders, payment ledger
-  payments_flow.py  # /buy → pay → verify → deliver (button-driven)
+  checkout_flow.py  # ⭐ autonomous Stripe checkout + inventory delivery + poller
+  payments_flow.py  # manual paste-ID flow (used when Stripe isn't configured)
+  stock_cli.py      # load inventory:  python run.py stock <id> <file>
   doctor.py         # preflight connection check (python run.py --check)
   payments/
+    stripe_gateway.py  # Stripe hosted checkout + status polling
     base.py         # verifier interface + result type
     paypal.py       # PayPal REST verification
     square.py       # Cash App Pay + Apple Pay (Square Payments API)
     manual.py       # human-approved fallback (Venmo, P2P Cash App)
     registry.py     # builds active verifiers from config
-catalog.json        # YOUR products / prices / FAQ / deliverables  ← edit this
+catalog.json        # YOUR products / prices / FAQ  ← edit this
 .env.example        # config template  → copy to .env
 run.py              # entry point:  python run.py
 tests/test_payments.py    # payment verification tests (mocked HTTP)
+tests/test_checkout.py    # Stripe checkout + inventory + delivery tests
 deploy/salesbot.service   # systemd unit for 24/7 running
 ```
 

@@ -66,7 +66,18 @@ class Config:
     cashapp_cashtag: str
     applepay_link: str
     venmo_handle: str
+    # Stripe (autonomous hosted checkout)
+    stripe_secret_key: str
+    stripe_success_url: str
+    stripe_cancel_url: str
+    stripe_payment_methods: list[str]
+    stripe_poll_interval: int
+    stripe_session_timeout: int
     catalog: dict = field(default_factory=dict)
+
+    @property
+    def stripe_enabled(self) -> bool:
+        return bool(self.stripe_secret_key)
 
     @property
     def payments_enabled(self) -> bool:
@@ -108,6 +119,17 @@ class Config:
             cashapp_cashtag=_get("CASHAPP_CASHTAG"),
             applepay_link=_get("APPLEPAY_LINK"),
             venmo_handle=_get("VENMO_HANDLE"),
+            stripe_secret_key=_get("STRIPE_SECRET_KEY"),
+            stripe_success_url=_get("STRIPE_SUCCESS_URL", "https://t.me"),
+            stripe_cancel_url=_get("STRIPE_CANCEL_URL", "https://t.me"),
+            stripe_payment_methods=[
+                p.strip().lower()
+                for p in (_get("STRIPE_PAYMENT_METHODS", "card,cashapp")
+                          .replace(";", ",").split(","))
+                if p.strip()
+            ],
+            stripe_poll_interval=_get_int("STRIPE_POLL_INTERVAL", 8),
+            stripe_session_timeout=_get_int("STRIPE_SESSION_TIMEOUT", 1800),
             catalog=catalog,
         )
 

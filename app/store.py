@@ -61,6 +61,22 @@ class Store:
                 created_at  REAL,
                 PRIMARY KEY (provider, payment_id)
             );
+            -- Digital inventory the bot delivers from. One row = one unique item
+            -- (license key, account, link…). state: available|reserved|consumed
+            CREATE TABLE IF NOT EXISTS stock (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id   TEXT NOT NULL,
+                content      TEXT NOT NULL,
+                state        TEXT NOT NULL DEFAULT 'available',
+                order_id     INTEGER,
+                reserved_at  REAL,
+                consumed_at  REAL,
+                created_at   REAL
+            );
+            CREATE INDEX IF NOT EXISTS idx_stock_lookup
+                ON stock (product_id, state);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_unique
+                ON stock (product_id, content);
             """
         )
         self._conn.commit()
@@ -121,8 +137,9 @@ class Store:
         ).fetchall()
 
     # ── orders ───────────────────────────────────────────────────────────
-    # States: pending → awaiting_id → (reviewing) → paid | failed | cancelled
-    _TERMINAL = ("paid", "failed", "cancelled")
+    # States: pending → awaiting_id/awaiting_payment → (reviewing) →
+    #         paid | paid_no_stock | failed | cancelled | expired
+    _TERMINAL = ("paid", "paid_no_stock", "failed", "cancelled", "expired")
 
     def create_order(
         self, chat_id: int, username: str, full_name: str,
@@ -184,6 +201,92 @@ class Store:
         return self._conn.execute(
             "SELECT * FROM orders ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
+
+    def orders_awaiting_payment(self) -> list[sqlite3.Row]:
+        """Open Stripe orders the poller must reconcile against Stripe."""
+        return self._conn.execute(
+            "SELECT * FROM orders WHERE state='awaiting_payment' "
+            "AND payment_id IS NOT NULL ORDER BY created_at ASC"
+        ).fetchall()
+
+    # ── digital inventory (stock) ────────────────────────────────────────
+    def add_stock(self, product_id: str, items: list[str]) -> int:
+        """Bulk-add unique deliverables. Duplicates are ignored. Returns #added."""
+        now = time.time()
+        added = 0
+        for raw in items:
+            content = raw.strip()
+            if not content:
+                continue
+            try:
+                self._conn.execute(
+                    "INSERT INTO stock (product_id, content, state, created_at) "
+                    "VALUES (?, ?, 'available', ?)",
+                    (product_id, content, now),
+                )
+                added += 1
+            except sqlite3.IntegrityError:
+                pass  # already stocked
+        self._conn.commit()
+        return added
+
+    def available_count(self, product_id: str) -> int:
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS n FROM stock WHERE product_id=? AND state='available'",
+            (product_id,),
+        ).fetchone()
+        return row["n"] if row else 0
+
+    def stock_summary(self) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT product_id, "
+            "SUM(state='available') AS available, "
+            "SUM(state='reserved') AS reserved, "
+            "SUM(state='consumed') AS consumed "
+            "FROM stock GROUP BY product_id ORDER BY product_id"
+        ).fetchall()
+
+    def reserve_stock(self, product_id: str, order_id: int) -> str | None:
+        """Atomically hold one available item for an order. None if out of stock."""
+        row = self._conn.execute(
+            "UPDATE stock SET state='reserved', order_id=?, reserved_at=? "
+            "WHERE id = (SELECT id FROM stock WHERE product_id=? AND state='available' "
+            "            ORDER BY id LIMIT 1) "
+            "RETURNING content",
+            (order_id, time.time(), product_id),
+        ).fetchone()
+        self._conn.commit()
+        return row["content"] if row else None
+
+    def consume_reserved_stock(self, order_id: int) -> str | None:
+        """Mark this order's reserved item consumed and return its content."""
+        row = self._conn.execute(
+            "UPDATE stock SET state='consumed', consumed_at=? "
+            "WHERE order_id=? AND state='reserved' RETURNING content",
+            (time.time(), order_id),
+        ).fetchone()
+        self._conn.commit()
+        return row["content"] if row else None
+
+    def release_reservation(self, order_id: int) -> None:
+        """Return an order's reserved item to the available pool."""
+        self._conn.execute(
+            "UPDATE stock SET state='available', order_id=NULL, reserved_at=NULL "
+            "WHERE order_id=? AND state='reserved'",
+            (order_id,),
+        )
+        self._conn.commit()
+
+    def release_stale_reservations(self) -> int:
+        """On startup, free items reserved for orders that never completed."""
+        cur = self._conn.execute(
+            "UPDATE stock SET state='available', order_id=NULL, reserved_at=NULL "
+            "WHERE state='reserved' AND order_id IN "
+            "(SELECT id FROM orders WHERE state IN "
+            " ('cancelled','failed','expired','pending'))"
+        )
+        self._conn.commit()
+        return cur.rowcount
 
     # ── payment-id ledger (double-spend protection) ──────────────────────
     def is_payment_consumed(self, provider: str, payment_id: str) -> bool:

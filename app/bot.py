@@ -13,9 +13,11 @@ from telegram.ext import (
     filters,
 )
 
+from app.checkout_flow import CheckoutFlow
 from app.config import Config
 from app.ollama_client import OllamaClient, OllamaError
 from app.payments import build_verifiers
+from app.payments.stripe_gateway import StripeGateway
 from app.payments_flow import PaymentFlow
 from app.sales import build_system_prompt, detect_buying_signal
 from app.store import Store
@@ -33,6 +35,7 @@ store: Store
 ollama: OllamaClient
 system_prompt: str
 payment_flow: PaymentFlow | None = None
+checkout_flow: CheckoutFlow | None = None
 
 
 def _display_name(update: Update) -> tuple[str, str]:
@@ -53,7 +56,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    buy_line = "/buy – see products and pay\n" if cfg.payments_enabled else ""
+    can_buy = cfg.stripe_enabled or cfg.payments_enabled
+    buy_line = "/buy – see products and pay\n" if can_buy else ""
     await update.message.reply_text(
         "Just chat with me naturally — tell me what you need and I'll help.\n\n"
         f"{buy_line}"
@@ -140,6 +144,8 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def _post_init(app: Application) -> None:
+    if checkout_flow is not None:
+        await checkout_flow.start(app)
     healthy = await ollama.health()
     if healthy:
         log.info("Ollama reachable; model '%s' is available.", cfg.ollama_model)
@@ -155,11 +161,13 @@ async def _post_shutdown(app: Application) -> None:
     await ollama.close()
     if payment_flow is not None:
         await payment_flow.close()
+    if checkout_flow is not None:
+        await checkout_flow.close()
     store.close()
 
 
 def main() -> None:
-    global cfg, store, ollama, system_prompt, payment_flow
+    global cfg, store, ollama, system_prompt, payment_flow, checkout_flow
     cfg = Config.load()
 
     problems = cfg.validate()
@@ -179,9 +187,25 @@ def main() -> None:
         num_ctx=cfg.ollama_num_ctx,
         timeout=cfg.ollama_timeout,
     )
-    verifiers = build_verifiers(cfg) if cfg.payments_enabled else {}
-    payment_flow = PaymentFlow(cfg, store, verifiers) if verifiers else None
-    payment_labels = [v.label for v in verifiers.values()]
+    # Prefer the autonomous Stripe checkout when configured; otherwise fall back
+    # to the manual/paste-ID provider flow.
+    if cfg.stripe_enabled:
+        gateway = StripeGateway(
+            cfg.stripe_secret_key,
+            success_url=cfg.stripe_success_url,
+            cancel_url=cfg.stripe_cancel_url,
+            payment_methods=cfg.stripe_payment_methods,
+        )
+        checkout_flow = CheckoutFlow(cfg, store, gateway)
+        payment_flow = None
+        payment_labels = ["card, Apple Pay, or Cash App"]
+        log.info("Autonomous Stripe checkout enabled (%s).",
+                 "LIVE" if gateway.live else "test")
+    else:
+        verifiers = build_verifiers(cfg) if cfg.payments_enabled else {}
+        payment_flow = PaymentFlow(cfg, store, verifiers) if verifiers else None
+        checkout_flow = None
+        payment_labels = [v.label for v in verifiers.values()]
 
     system_prompt = build_system_prompt(
         cfg.business_name, cfg.catalog, cfg.checkout_url,
@@ -199,7 +223,9 @@ def main() -> None:
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("reset", reset_cmd))
     app.add_handler(CommandHandler("leads", leads_cmd))
-    if payment_flow is not None:
+    if checkout_flow is not None:
+        checkout_flow.register(app)
+    elif payment_flow is not None:
         payment_flow.register(app)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
 
