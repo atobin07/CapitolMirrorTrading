@@ -102,6 +102,7 @@ manual-provider flow below if you still want them).
 | `/help`   | anyone    | How to use the bot                     |
 | `/reset`  | anyone    | Clear conversation memory              |
 | `/buy`    | anyone    | Pick a product and pay (if enabled)    |
+| `/terms`  | anyone    | Refund policy, terms & support contact |
 | `/leads`  | you only  | List recent captured leads             |
 | `/orders` | you only  | List recent orders + their status      |
 | `/stock`  | you only  | Show inventory counts per product      |
@@ -295,6 +296,33 @@ up, and pings you to fulfill.
 - **Comply with the providers' terms** and your local tax/consumer rules.
 
 ---
+
+## Staying compliant
+
+Running this without tripping platform terms comes down to two things: **what
+you sell** and **not deceiving buyers**. The setup is built for the compliant path.
+
+- **Telegram** — bots are official, and the Bot API only lets you message people
+  who message you first, so you can't cold-spam. Selling legal goods to inbound
+  buyers is within terms.
+- **Stripe** — real hosted checkout + real delivery is the compliant pattern.
+  Sell only what Stripe allows (digital goods/services you own or are licensed
+  to sell are fine; reselling third-party accounts / keys / gift cards is often
+  prohibited — check Stripe's restricted-business list). The fastest way to get
+  frozen is a high dispute rate, so honesty and delivery matter.
+- **Bot disclosure** — the bot shows a **one-time notice** at the start of each
+  conversation ("you're chatting with an automated assistant"). This keeps you
+  onside with laws like California's SB 1001 and lowers chargebacks. It's on by
+  default (`DISCLOSURE_ENABLED`); if asked directly, the persona also answers
+  honestly that it's automated (it never fabricates being a specific human).
+- **Terms & refunds** — `/terms` shows your refund policy + support contact
+  (`REFUND_POLICY`, `SUPPORT_CONTACT`, `TERMS_URL`). Processors expect these
+  visible. Keep `SUPPORT_CONTACT` set so buyers reach a human before they
+  dispute.
+
+`python run.py --check` flags missing refund policy / support contact when
+Stripe is on. **None of this is legal advice** — confirm the rules for your
+products and jurisdiction.
 
 ## Sounding like a real person
 

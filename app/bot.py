@@ -46,11 +46,45 @@ def _display_name(update: Update) -> tuple[str, str]:
     return username, full_name
 
 
+def _disclosure_text() -> str:
+    return cfg.disclosure_text.replace("{business}", cfg.business_name)
+
+
+def _terms_text() -> str:
+    parts = [f"📋 {cfg.business_name} — terms & refunds", ""]
+    parts.append(cfg.refund_policy)
+    if cfg.support_contact:
+        parts.append("")
+        parts.append(f"Questions? {cfg.support_contact}")
+    if cfg.terms_url:
+        parts.append("")
+        parts.append(f"Full terms: {cfg.terms_url}")
+    parts.append("")
+    parts.append(
+        "Payments are processed securely by Stripe. This chat is handled by an "
+        "automated assistant."
+    )
+    return "\n".join(parts)
+
+
+async def _maybe_disclose(chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the one-time bot-disclosure notice (compliance)."""
+    if cfg.disclosure_enabled and store.needs_disclosure(chat_id):
+        await context.bot.send_message(chat_id, _disclosure_text())
+        store.mark_disclosed(chat_id)
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    store.reset(update.effective_chat.id)
+    chat_id = update.effective_chat.id
+    store.reset(chat_id)
+    await _maybe_disclose(chat_id, context)
     name = f" {cfg.persona_name} here." if cfg.persona_name else ""
     greeting = f"hey.{name} what's up?"
-    await humanize.deliver(context.bot, update.effective_chat.id, greeting, cfg)
+    await humanize.deliver(context.bot, chat_id, greeting, cfg)
+
+
+async def terms_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(_terms_text())
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -59,6 +93,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "Just chat with me naturally — tell me what you need and I'll help.\n\n"
         f"{buy_line}"
+        "/terms – refund policy & terms\n"
         "/start – restart our conversation\n"
         "/help – show this message"
     )
@@ -106,6 +141,9 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     chat_id = update.effective_chat.id
     user_text = update.message.text.strip()
     username, full_name = _display_name(update)
+
+    # Compliance: disclose once, before the first real exchange.
+    await _maybe_disclose(chat_id, context)
 
     # If the customer is mid-checkout and owes us a payment ID, that takes
     # priority over the LLM — money handling is deterministic, never AI-driven.
@@ -222,6 +260,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("reset", reset_cmd))
+    app.add_handler(CommandHandler("terms", terms_cmd))
     app.add_handler(CommandHandler("leads", leads_cmd))
     if checkout_flow is not None:
         checkout_flow.register(app)

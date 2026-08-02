@@ -68,6 +68,12 @@ class Config:
     humanize: bool
     typing_cps: float
     max_bubbles: int
+    # Compliance
+    disclosure_enabled: bool
+    disclosure_text: str
+    refund_policy: str
+    support_contact: str
+    terms_url: str
     # Payments
     payment_providers: list[str]
     paypal_env: str
@@ -123,6 +129,21 @@ class Config:
             humanize=_get_bool("HUMANIZE", True),
             typing_cps=_get_float("TYPING_CPS", 18.0),
             max_bubbles=_get_int("MAX_BUBBLES", 3),
+            disclosure_enabled=_get_bool("DISCLOSURE_ENABLED", True),
+            disclosure_text=_get(
+                "DISCLOSURE_TEXT",
+                "heads up — you're chatting with an automated assistant for "
+                "{business}. i can still get you sorted. type /terms anytime for "
+                "the refund policy.",
+            ),
+            refund_policy=_get(
+                "REFUND_POLICY",
+                "All sales are final once your item is delivered, unless it's "
+                "defective or you never received it — in that case you get a full "
+                "refund. Just reach out and we'll sort it out.",
+            ),
+            support_contact=_get("SUPPORT_CONTACT"),
+            terms_url=_get("TERMS_URL"),
             payment_providers=[
                 p.strip().lower()
                 for p in _get("PAYMENT_PROVIDERS").replace(";", ",").split(",")

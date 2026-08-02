@@ -77,6 +77,11 @@ class Store:
                 ON stock (product_id, state);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_unique
                 ON stock (product_id, content);
+            -- Tracks which chats have already seen the bot-disclosure notice.
+            CREATE TABLE IF NOT EXISTS disclosures (
+                chat_id    INTEGER PRIMARY KEY,
+                shown_at   REAL
+            );
             """
         )
         self._conn.commit()
@@ -114,6 +119,24 @@ class Store:
     def reset(self, chat_id: int) -> None:
         self._conn.execute(
             "DELETE FROM conversations WHERE chat_id = ?", (chat_id,)
+        )
+        # A fresh conversation should disclose again.
+        self._conn.execute(
+            "DELETE FROM disclosures WHERE chat_id = ?", (chat_id,)
+        )
+        self._conn.commit()
+
+    # ── bot-disclosure tracking ──────────────────────────────────────────
+    def needs_disclosure(self, chat_id: int) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM disclosures WHERE chat_id = ?", (chat_id,)
+        ).fetchone()
+        return row is None
+
+    def mark_disclosed(self, chat_id: int) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO disclosures (chat_id, shown_at) VALUES (?, ?)",
+            (chat_id, time.time()),
         )
         self._conn.commit()
 

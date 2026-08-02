@@ -203,6 +203,24 @@ async def run_checks() -> int:
     else:
         _check_payments(cfg)
 
+    if cfg.stripe_enabled:
+        print("\nCompliance")
+        if cfg.disclosure_enabled:
+            _ok("Bot disclosure", "one-time notice enabled")
+        else:
+            _warn("Bot disclosure", "DISCLOSURE_ENABLED=false — required for sales "
+                  "bots in some places (e.g. CA). Turn it on to be safe.")
+        if cfg.refund_policy.strip():
+            _ok("Refund policy", "set (shown via /terms)")
+        else:
+            _warn("Refund policy", "empty — processors expect a visible policy. "
+                  "Set REFUND_POLICY.")
+        if cfg.support_contact.strip():
+            _ok("Support contact", cfg.support_contact)
+        else:
+            _warn("Support contact", "no SUPPORT_CONTACT — add a way for buyers to "
+                  "reach a human (lowers disputes).")
+
     print("\n" + "─" * 44)
     essential = tg and ol and cat and stripe_ok
     if essential:
