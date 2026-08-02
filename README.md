@@ -11,6 +11,37 @@ Customer ──▶ Telegram ──▶ bot (this repo) ──▶ Ollama (your dro
                               └─▶ notifies you + saves the lead
 ```
 
+## How it all connects
+
+Everything below is already wired — there's no glue code left to write, only
+three credentials to fill in. A single message flows like this:
+
+```
+Customer messages your @handle
+        │
+        ▼
+Telegram  ──(long-polling)──▶  bot (run.py)
+                                 │
+        ┌────────────────────────┼────────────────────────┐
+        ▼                        ▼                         ▼
+  mid-checkout?            normal message              /buy command
+  verify payment ID     system prompt (your          product buttons →
+  (deterministic)     catalog) + chat history →      pick provider →
+        │                 Ollama model on your        pay → send ID →
+        │                    droplet → reply           verify → deliver
+        ▼                        │                         │
+   deliver / notify         reply to customer        notify you on a sale
+```
+
+- **"It talks based on its training"** → the message goes to your Ollama model
+  with a *system prompt built from `catalog.json`*, so it answers in its own
+  words but only sells what you actually offer.
+- **"It sells based on the request"** → the same prompt tells it to qualify the
+  buyer, recommend the best-fit product, and send them to `/buy` to pay.
+- **The three plugs you provide:** a Telegram bot token, a running Ollama with a
+  model pulled, and your `catalog.json`. `python run.py --check` confirms all
+  three are connected before you go live.
+
 ## What it does
 
 - 💬 **Natural sales conversations** — the LLM plays a friendly, on-brand seller.
@@ -94,6 +125,15 @@ Then edit **`catalog.json`** with your client's real products, prices, and FAQ.
 This file is the single source of truth the bot sells from.
 
 ## 5. Run it
+
+**First, verify every connection is live** (token, Ollama, model, catalog):
+
+```bash
+python run.py --check
+```
+
+You'll get a pass/fail checklist with the exact fix for anything broken. Once
+it says *Ready to sell*, start the bot:
 
 ```bash
 python run.py
@@ -227,6 +267,7 @@ app/
   sales.py          # system prompt + buying-signal detection
   store.py          # SQLite: conversations, leads, orders, payment ledger
   payments_flow.py  # /buy → pay → verify → deliver (button-driven)
+  doctor.py         # preflight connection check (python run.py --check)
   payments/
     base.py         # verifier interface + result type
     paypal.py       # PayPal REST verification
