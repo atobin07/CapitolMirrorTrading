@@ -148,20 +148,14 @@ class _FakeApp:
 
 
 class _FakeGateway:
-    """Returns a paid session for any id."""
-    def __init__(self):
-        self.live = True
+    """Uniform gateway that reports any checkout as paid."""
+    key = "stripe"
+    label = "Card / Apple Pay / Cash App"
 
-    async def get_session(self, sid):
-        from app.payments.stripe_gateway import CheckoutSession
-        return CheckoutSession(
-            id=sid, url="x", status="complete", payment_status="paid",
-            amount_total=Decimal("149"), currency="USD",
-            payment_intent="pi_e2e", raw={},
-        )
-
-    async def expire_session(self, sid):
-        pass
+    async def poll(self, ref):
+        from app.payments.gateway import PaymentState
+        return PaymentState("paid", amount=Decimal("149"), currency="USD",
+                            txn_ref="pi_e2e")
 
     async def close(self):
         pass
@@ -181,7 +175,7 @@ async def test_fulfil_e2e():
         stripe_poll_interval=8,
         stripe_session_timeout=1800,
     )
-    flow = CheckoutFlow(cfg, s, _FakeGateway())
+    flow = CheckoutFlow(cfg, s, {"stripe": _FakeGateway()})
 
     order_id = s.create_order(42, "@buyer", "Buyer", "pro", "Pro", "149", "USD")
     s.reserve_stock("pro", order_id)

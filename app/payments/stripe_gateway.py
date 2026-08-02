@@ -14,6 +14,15 @@ from urllib.parse import urlencode
 
 import httpx
 
+from app.payments.gateway import (
+    ERROR,
+    EXPIRED,
+    PAID,
+    UNPAID,
+    CheckoutLink,
+    PaymentState,
+)
+
 log = logging.getLogger(__name__)
 
 _API = "https://api.stripe.com/v1"
@@ -44,6 +53,9 @@ class StripeError(RuntimeError):
 
 
 class StripeGateway:
+    key = "stripe"
+    label = "Card / Apple Pay / Cash App"
+
     def __init__(
         self,
         secret_key: str,
@@ -118,6 +130,30 @@ class StripeGateway:
         if resp.status_code >= 400:
             raise StripeError(f"Stripe {resp.status_code}: {resp.text[:300]}")
         return self._parse(resp.json())
+
+    # ── uniform gateway interface (see app/payments/gateway.py) ──────────
+    async def create_checkout(
+        self, *, product_name: str, amount, currency: str, order_id: int, chat_id: int
+    ) -> CheckoutLink:
+        s = await self.create_session(
+            product_name=product_name, amount=amount, currency=currency,
+            order_id=order_id, chat_id=chat_id,
+        )
+        return CheckoutLink(ref=s.id, url=s.url)
+
+    async def poll(self, ref: str) -> PaymentState:
+        try:
+            s = await self.get_session(ref)
+        except StripeError as exc:
+            return PaymentState(ERROR, reason=str(exc))
+        if s.is_paid:
+            return PaymentState(
+                PAID, amount=s.amount_total, currency=s.currency,
+                txn_ref=s.payment_intent or s.id,
+            )
+        if s.is_expired:
+            return PaymentState(EXPIRED, reason="checkout expired")
+        return PaymentState(UNPAID)
 
     async def expire_session(self, session_id: str) -> None:
         try:

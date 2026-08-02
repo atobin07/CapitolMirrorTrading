@@ -153,9 +153,24 @@ def _check_inventory(store, cfg: Config) -> None:
               "`python run.py stock <id> <file.txt>` or it'll show as sold out.")
 
 
+async def _check_paypal(cfg: Config) -> bool:
+    from app.payments.paypal_gateway import PayPalGateway
+    gw = PayPalGateway(cfg.paypal_client_id, cfg.paypal_secret, env=cfg.paypal_env)
+    try:
+        ok, detail = await gw.ping()
+    finally:
+        await gw.close()
+    if ok:
+        _ok("PayPal / Venmo", detail)
+        return True
+    _fail("PayPal / Venmo", f"PayPal rejected the keys ({detail}). Check "
+          "PAYPAL_CLIENT_ID / PAYPAL_SECRET / PAYPAL_ENV.")
+    return False
+
+
 def _check_payments(cfg: Config) -> bool:
-    if cfg.stripe_enabled:
-        # Stripe check is handled separately (async) in run_checks.
+    if cfg.autonomous_checkout_enabled:
+        # Stripe/PayPal checks are handled separately (async) in run_checks.
         return True
     if not cfg.payments_enabled:
         _warn("Payments", "disabled (PAYMENT_PROVIDERS empty). Bot sells + hands "
@@ -191,9 +206,12 @@ async def run_checks() -> int:
     _check_sellers(cfg)
 
     print("\nPayments")
-    stripe_ok = True
-    if cfg.stripe_enabled:
-        stripe_ok = await _check_stripe(cfg)
+    processors_ok = True
+    if cfg.autonomous_checkout_enabled:
+        if cfg.stripe_enabled:
+            processors_ok = await _check_stripe(cfg) and processors_ok
+        if cfg.paypal_checkout_enabled:
+            processors_ok = await _check_paypal(cfg) and processors_ok
         from app.store import Store
         store = Store(cfg.database_path)
         try:
@@ -202,8 +220,9 @@ async def run_checks() -> int:
             store.close()
     else:
         _check_payments(cfg)
+    stripe_ok = processors_ok
 
-    if cfg.stripe_enabled:
+    if cfg.autonomous_checkout_enabled:
         print("\nCompliance")
         if cfg.disclosure_enabled:
             _ok("Bot disclosure", "one-time notice enabled")

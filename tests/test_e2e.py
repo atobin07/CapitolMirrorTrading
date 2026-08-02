@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app.bot as bot  # noqa: E402
 from app import humanize  # noqa: E402
 from app.checkout_flow import CheckoutFlow  # noqa: E402
-from app.payments.stripe_gateway import CheckoutSession  # noqa: E402
+from app.payments.gateway import CheckoutLink, PaymentState  # noqa: E402
 from app.sales import build_system_prompt  # noqa: E402
 from app.store import Store  # noqa: E402
 
@@ -63,34 +63,23 @@ class FakeOllama:
 
 
 class FakeGateway:
-    """Stands in for the Stripe API."""
+    """Stands in for a payment processor (uniform gateway interface)."""
+    key = "stripe"
+    label = "Card / Apple Pay / Cash App"
+
     def __init__(self):
-        self.live = True
         self.paid = False
         self._amount = Decimal("0")
 
-    async def create_session(self, *, product_name, amount, currency, order_id, chat_id):
+    async def create_checkout(self, *, product_name, amount, currency, order_id, chat_id):
         self._amount = Decimal(str(amount))
-        return CheckoutSession(
-            id="cs_demo", url="https://checkout.stripe.com/pay/cs_demo",
-            status="open", payment_status="unpaid",
-            amount_total=self._amount, currency=currency, payment_intent=None, raw={},
-        )
+        return CheckoutLink(ref="cs_demo", url="https://checkout.stripe.com/pay/cs_demo")
 
-    async def get_session(self, sid):
+    async def poll(self, ref):
         if self.paid:
-            return CheckoutSession(
-                id=sid, url="x", status="complete", payment_status="paid",
-                amount_total=self._amount, currency="USD",
-                payment_intent="pi_demo", raw={},
-            )
-        return CheckoutSession(
-            id=sid, url="x", status="open", payment_status="unpaid",
-            amount_total=self._amount, currency="USD", payment_intent=None, raw={},
-        )
-
-    async def expire_session(self, sid):
-        pass
+            return PaymentState("paid", amount=self._amount, currency="USD",
+                                txn_ref="pi_demo")
+        return PaymentState("unpaid")
 
     async def close(self):
         pass
@@ -167,7 +156,7 @@ async def main():
         rate_limit_per_min=15, max_input_chars=1000,
     )
     gateway = FakeGateway()
-    flow = CheckoutFlow(cfg, store, gateway)
+    flow = CheckoutFlow(cfg, store, {"stripe": gateway})
 
     # Inject the real bot module's globals (same code the live bot runs).
     bot.cfg = cfg

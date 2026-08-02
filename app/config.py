@@ -95,11 +95,23 @@ class Config:
     stripe_payment_methods: list[str]
     stripe_poll_interval: int
     stripe_session_timeout: int
+    # PayPal + Venmo autonomous checkout (Orders API)
+    paypal_return_url: str
+    paypal_cancel_url: str
+    paypal_enable_venmo: bool
     catalog: dict = field(default_factory=dict)
 
     @property
     def stripe_enabled(self) -> bool:
         return bool(self.stripe_secret_key)
+
+    @property
+    def paypal_checkout_enabled(self) -> bool:
+        return bool(self.paypal_client_id and self.paypal_secret)
+
+    @property
+    def autonomous_checkout_enabled(self) -> bool:
+        return self.stripe_enabled or self.paypal_checkout_enabled
 
     @property
     def payments_enabled(self) -> bool:
@@ -176,6 +188,9 @@ class Config:
             ],
             stripe_poll_interval=_get_int("STRIPE_POLL_INTERVAL", 8),
             stripe_session_timeout=_get_int("STRIPE_SESSION_TIMEOUT", 1800),
+            paypal_return_url=_get("PAYPAL_RETURN_URL", "https://t.me"),
+            paypal_cancel_url=_get("PAYPAL_CANCEL_URL", "https://t.me"),
+            paypal_enable_venmo=_get_bool("PAYPAL_ENABLE_VENMO", True),
             catalog=catalog,
         )
 

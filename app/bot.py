@@ -19,6 +19,7 @@ from app.config import Config
 from app.ollama_client import OllamaClient, OllamaError
 from app.ratelimit import RateLimiter
 from app.payments import build_verifiers
+from app.payments.paypal_gateway import PayPalGateway
 from app.payments.stripe_gateway import StripeGateway
 from app.payments_flow import PaymentFlow
 from app.sales import build_system_prompt, detect_buying_signal
@@ -241,20 +242,31 @@ def main() -> None:
         num_ctx=cfg.ollama_num_ctx,
         timeout=cfg.ollama_timeout,
     )
-    # Prefer the autonomous Stripe checkout when configured; otherwise fall back
-    # to the manual/paste-ID provider flow.
-    if cfg.stripe_enabled:
-        gateway = StripeGateway(
-            cfg.stripe_secret_key,
-            success_url=cfg.stripe_success_url,
-            cancel_url=cfg.stripe_cancel_url,
-            payment_methods=cfg.stripe_payment_methods,
-        )
-        checkout_flow = CheckoutFlow(cfg, store, gateway)
+    # Prefer autonomous hosted checkout (Stripe and/or PayPal) when configured;
+    # otherwise fall back to the manual/paste-ID provider flow.
+    if cfg.autonomous_checkout_enabled:
+        gateways = {}
+        if cfg.stripe_enabled:
+            gateways["stripe"] = StripeGateway(
+                cfg.stripe_secret_key,
+                success_url=cfg.stripe_success_url,
+                cancel_url=cfg.stripe_cancel_url,
+                payment_methods=cfg.stripe_payment_methods,
+            )
+        if cfg.paypal_checkout_enabled:
+            gateways["paypal"] = PayPalGateway(
+                cfg.paypal_client_id,
+                cfg.paypal_secret,
+                env=cfg.paypal_env,
+                return_url=cfg.paypal_return_url,
+                cancel_url=cfg.paypal_cancel_url,
+                brand_name=cfg.business_name,
+                enable_venmo=cfg.paypal_enable_venmo,
+            )
+        checkout_flow = CheckoutFlow(cfg, store, gateways)
         payment_flow = None
-        payment_labels = ["card, Apple Pay, or Cash App"]
-        log.info("Autonomous Stripe checkout enabled (%s).",
-                 "LIVE" if gateway.live else "test")
+        payment_labels = [gw.label for gw in gateways.values()]
+        log.info("Autonomous checkout enabled: %s", ", ".join(gateways) or "none")
     else:
         verifiers = build_verifiers(cfg) if cfg.payments_enabled else {}
         payment_flow = PaymentFlow(cfg, store, verifiers) if verifiers else None

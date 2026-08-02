@@ -42,7 +42,28 @@ Telegram  ──(long-polling)──▶  bot (run.py)
   model pulled, and your `catalog.json`. `python run.py --check` confirms all
   three are connected before you go live.
 
-## Fully autonomous mode (Stripe + inventory) ⭐
+## Accepting Cash App, PayPal, and Venmo
+
+These three live in two rival ecosystems, so you need **two processors** — no
+single one does all three:
+
+| Method | Processor | Set in `.env` |
+|---|---|---|
+| **Cash App** (+ cards, Apple Pay, Google Pay) | Stripe | `STRIPE_SECRET_KEY` |
+| **PayPal** | PayPal | `PAYPAL_CLIENT_ID` + `PAYPAL_SECRET` |
+| **Venmo** | PayPal (Venmo is owned by PayPal) | same PayPal keys, `PAYPAL_ENABLE_VENMO=true` |
+
+Set either or both. When both are on, `/buy` shows the buyer a choice —
+**Card / Apple Pay / Cash App** (Stripe) or **PayPal / Venmo** (PayPal) — and
+each is verified the same autonomous way: the bot creates a hosted checkout,
+polls that processor's API until it confirms `paid`/`COMPLETED` with the right
+amount, then delivers from inventory. The customer's word is never trusted.
+
+> Venmo only appears inside PayPal checkout for eligible buyers (US, on the
+> mobile app, with Venmo enabled on your PayPal account) — that's PayPal's
+> eligibility, not something the code controls.
+
+## Fully autonomous mode (Stripe / PayPal + inventory) ⭐
 
 Set `STRIPE_SECRET_KEY` and the bot runs **end-to-end with zero human touch**:
 
@@ -468,7 +489,9 @@ app/
   stock_cli.py      # load inventory:  python run.py stock <id> <file>
   doctor.py         # preflight connection check (python run.py --check)
   payments/
-    stripe_gateway.py  # Stripe hosted checkout + status polling
+    gateway.py      # shared hosted-checkout interface (CheckoutLink/PaymentState)
+    stripe_gateway.py  # Stripe checkout (cards, Apple Pay, Cash App Pay)
+    paypal_gateway.py  # PayPal Orders checkout (PayPal + Venmo)
     base.py         # verifier interface + result type
     paypal.py       # PayPal REST verification
     square.py       # Cash App Pay + Apple Pay (Square Payments API)
