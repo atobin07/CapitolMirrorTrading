@@ -138,13 +138,14 @@ The bot talks to Ollama over HTTP at `OLLAMA_HOST`.
 
 ```bash
 # on the droplet
-git clone <this-repo> /opt/salesbot
-cd /opt/salesbot
-
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+git clone -b claude/telegram-sales-ollama-chatbot-v007fe <this-repo> salesbot
+cd salesbot
+./setup.sh            # creates venv, installs deps, scaffolds .env, runs preflight
 ```
+
+`setup.sh` is safe to re-run. It'll tell you to edit `.env`, then re-run it to
+verify every connection. (Manual equivalent: `python3 -m venv .venv &&
+source .venv/bin/activate && pip install -r requirements.txt`.)
 
 ## 4. Configure
 
@@ -194,12 +195,14 @@ Open Telegram, message your bot, and try: *"what do you sell?"*, then
 ## 6. Keep it running 24/7 (systemd)
 
 ```bash
-# edit paths/user inside the file first
-sudo cp deploy/salesbot.service /etc/systemd/system/salesbot.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now salesbot
+./setup.sh --systemd     # generates the unit with the right paths/user, starts it
 journalctl -u salesbot -f        # live logs
+sudo systemctl restart salesbot  # after editing .env or catalog.json
 ```
+
+(Prefer to do it by hand? A template lives at `deploy/salesbot.service` — edit
+the paths/user, `sudo cp` it into `/etc/systemd/system/`, then
+`daemon-reload && enable --now`.)
 
 ---
 
