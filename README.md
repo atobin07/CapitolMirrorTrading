@@ -322,6 +322,45 @@ up, and pings you to fulfill.
 
 ---
 
+## Running many client bots (multi-tenant)
+
+One droplet, one Ollama model, **many client bots** — each with its own Telegram
+handle, personality, products, and database. You do **not** retrain Ollama per
+client: personality comes from each client's persona + catalog, fed to the same
+shared model. Adding a client takes minutes, not GPU hours.
+
+```
+┌──────────────── one droplet ────────────────┐
+│  ollama.service         ← ONE shared model    │
+│  salesbot-acme.service  → token · persona · catalog · db  (Acme)
+│  salesbot-neon.service  → token · persona · catalog · db  (Neon)
+│  salesbot-…             → …                                        │
+└───────────────────────────────────────────────┘
+```
+
+**Add a client:**
+```bash
+python run.py new-client "Acme Digital"
+```
+This creates an isolated `clients/acme-digital/` with its own `.env`, `catalog.json`,
+`data/` (database), and a ready `salesbot-acme-digital.service`. Then:
+```bash
+nano clients/acme-digital/acme-digital.env    # its token, OLLAMA_MODEL, persona
+nano clients/acme-digital/catalog.json         # its products
+python run.py --env clients/acme-digital/acme-digital.env --check
+sudo cp clients/acme-digital/salesbot-acme-digital.service /etc/systemd/system/
+sudo systemctl enable --now salesbot-acme-digital
+```
+Every command takes `--env <file>` to target a specific client, so one checkout
+of this repo runs them all. `clients/` is git-ignored (it holds tokens/keys).
+
+**Giving each client a distinct voice** is just config: set `PERSONA_NAME` and
+`PERSONA_STYLE` in that client's `.env`, and write their `catalog.json`. The
+default posture (conversational, skeptical, lets the buyer chase) applies to all;
+`PERSONA_STYLE` tunes each one. If you want a *named* Ollama model per client
+(e.g. baked-in default temperature), you can `ollama create <name> -f Modelfile`
+and point that client's `OLLAMA_MODEL` at it — optional, not required.
+
 ## Staying compliant
 
 Running this without tripping platform terms comes down to two things: **what

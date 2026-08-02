@@ -1,6 +1,9 @@
 # Secrets & local config
 .env
 
+# Per-client configs (contain tokens/keys + their own data)
+clients/
+
 # Data / runtime
 data/*.db
 data/*.db-journal

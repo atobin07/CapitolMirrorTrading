@@ -104,7 +104,9 @@ class Config:
 
     @classmethod
     def load(cls) -> "Config":
-        catalog_path = ROOT / "catalog.json"
+        # Per-client catalog: CATALOG_PATH lets each bot use its own file.
+        cat_path = _get("CATALOG_PATH", "catalog.json")
+        catalog_path = Path(cat_path) if os.path.isabs(cat_path) else (ROOT / cat_path)
         catalog: dict = {}
         if catalog_path.exists():
             catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
