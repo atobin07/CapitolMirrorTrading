@@ -296,6 +296,29 @@ up, and pings you to fulfill.
 
 ---
 
+## Sounding like a real person
+
+By default the bot chats like a human texting, not a bot writing essays. Three
+things do the work:
+
+- **A persona** — set `PERSONA_NAME` (e.g. `Alex`) and optional `PERSONA_STYLE`
+  (e.g. *"laid-back, a bit of slang, sneaker nerd"*). The model stays in
+  character and won't refer to itself as an AI or bot.
+- **Short chat bubbles** — replies are split into a few short messages instead
+  of one long block (`MAX_BUBBLES`).
+- **Realistic typing** — a "typing…" indicator with a delay proportional to
+  message length (`TYPING_CPS`), plus markdown/bullets stripped out — real
+  people don't send **bold** text or bullet lists.
+
+Turn it all off with `HUMANIZE=false` for plain, instant single-message replies.
+
+> ⚠️ **One honest caveat.** A warm, named persona is normal and fine. But making
+> the bot *actively deny being a bot* when a customer directly asks is a
+> different thing — some places (e.g. California's bot-disclosure law) require
+> disclosure for sales, and buyers who feel tricked file more chargebacks. The
+> default prompt keeps the persona natural without constructing fake proof of
+> being human; decide your own policy for the "are you a real person?" question.
+
 ## Tuning for more sales
 
 - **Catalog copy matters most.** Punchy `summary` lines and clear `details`
@@ -316,7 +339,8 @@ app/
   bot.py            # Telegram handlers + main loop
   config.py         # loads .env + catalog.json
   ollama_client.py  # async Ollama chat client
-  sales.py          # system prompt + buying-signal detection
+  sales.py          # persona/system prompt + buying-signal detection
+  humanize.py       # chat bubbles + typing delays + markdown stripping
   store.py          # SQLite: conversations, leads, orders, payment ledger
   checkout_flow.py  # ⭐ autonomous Stripe checkout + inventory delivery + poller
   payments_flow.py  # manual paste-ID flow (used when Stripe isn't configured)

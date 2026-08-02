@@ -13,6 +13,7 @@ from telegram.ext import (
     filters,
 )
 
+from app import humanize
 from app.checkout_flow import CheckoutFlow
 from app.config import Config
 from app.ollama_client import OllamaClient, OllamaError
@@ -47,12 +48,9 @@ def _display_name(update: Update) -> tuple[str, str]:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     store.reset(update.effective_chat.id)
-    greeting = (
-        f"👋 Hey! Welcome to {cfg.business_name}. "
-        "I'm here to help you find the right fit and answer any questions. "
-        "What are you looking for today?"
-    )
-    await update.message.reply_text(greeting)
+    name = f" I'm {cfg.persona_name}." if cfg.persona_name else ""
+    greeting = f"hey!{name} what can I help you find today?"
+    await humanize.deliver(context.bot, update.effective_chat.id, greeting, cfg)
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -127,7 +125,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     except OllamaError as exc:
         log.error("Ollama error: %s", exc)
         await update.message.reply_text(
-            "Sorry, I'm having a brief hiccup — give me a moment and try again."
+            "sorry, my phone's being weird for a sec — say that again?"
         )
         return
 
@@ -135,7 +133,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     history.append({"role": "assistant", "content": reply})
     store.save_history(chat_id, history, username, full_name)
 
-    await update.message.reply_text(reply)
+    await humanize.deliver(context.bot, chat_id, reply, cfg)
 
     # Capture + notify on strong buying intent.
     if detect_buying_signal(user_text):
@@ -210,6 +208,8 @@ def main() -> None:
     system_prompt = build_system_prompt(
         cfg.business_name, cfg.catalog, cfg.checkout_url,
         payment_methods=payment_labels,
+        persona_name=cfg.persona_name,
+        persona_style=cfg.persona_style,
     )
 
     app = (

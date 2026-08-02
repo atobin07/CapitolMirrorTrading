@@ -31,6 +31,13 @@ def _get_float(name: str, default: float) -> float:
         return default
 
 
+def _get_bool(name: str, default: bool) -> bool:
+    raw = _get(name).lower()
+    if not raw:
+        return default
+    return raw in ("1", "true", "yes", "on", "y")
+
+
 def _parse_ids(raw: str) -> list[int]:
     ids: list[int] = []
     for part in raw.replace(";", ",").split(","):
@@ -55,6 +62,12 @@ class Config:
     business_name: str
     checkout_url: str
     database_path: str
+    # Persona / human-like chat
+    persona_name: str
+    persona_style: str
+    humanize: bool
+    typing_cps: float
+    max_bubbles: int
     # Payments
     payment_providers: list[str]
     paypal_env: str
@@ -105,6 +118,11 @@ class Config:
             business_name=_get("BUSINESS_NAME", "Your Business"),
             checkout_url=_get("CHECKOUT_URL"),
             database_path=db_path,
+            persona_name=_get("PERSONA_NAME"),
+            persona_style=_get("PERSONA_STYLE"),
+            humanize=_get_bool("HUMANIZE", True),
+            typing_cps=_get_float("TYPING_CPS", 18.0),
+            max_bubbles=_get_int("MAX_BUBBLES", 3),
             payment_providers=[
                 p.strip().lower()
                 for p in _get("PAYMENT_PROVIDERS").replace(";", ",").split(",")
