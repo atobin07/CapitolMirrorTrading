@@ -94,6 +94,12 @@ def test_persona_prompt():
     check("You are Alex" in sp, "persona name in prompt")
     check("NO markdown" in sp, "texting rules in prompt")
     check("you love sneakers" in sp, "custom style in prompt")
+    # Reluctant / skeptical / make-them-chase posture.
+    low = sp.lower()
+    check("don't need this sale" in low, "not-desperate posture in prompt")
+    check("skeptical" in low, "skeptical posture in prompt")
+    check("let them chase" in low, "make-them-chase posture in prompt")
+    check("never sound salesy" in low, "not-salesy rule in prompt")
 
 
 async def main():

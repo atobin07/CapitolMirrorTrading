@@ -48,8 +48,8 @@ def _display_name(update: Update) -> tuple[str, str]:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     store.reset(update.effective_chat.id)
-    name = f" I'm {cfg.persona_name}." if cfg.persona_name else ""
-    greeting = f"hey!{name} what can I help you find today?"
+    name = f" {cfg.persona_name} here." if cfg.persona_name else ""
+    greeting = f"hey.{name} what's up?"
     await humanize.deliver(context.bot, update.effective_chat.id, greeting, cfg)
 
 

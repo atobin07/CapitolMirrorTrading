@@ -304,6 +304,12 @@ things do the work:
 - **A persona** — set `PERSONA_NAME` (e.g. `Alex`) and optional `PERSONA_STYLE`
   (e.g. *"laid-back, a bit of slang, sneaker nerd"*). The model stays in
   character and won't refer to itself as an AI or bot.
+- **A low-key, non-salesy posture** (the default voice) — it doesn't pitch or
+  chase. It's conversational and a little skeptical: it feels the buyer out,
+  makes *them* explain why it's a fit, holds back detail, and uses takeaways
+  ("no rush", "not really for everyone") so the buyer leans in instead of being
+  pushed. It only mentions `/buy` once the buyer clearly wants it. Tune the
+  intensity with `PERSONA_STYLE`.
 - **Short chat bubbles** — replies are split into a few short messages instead
   of one long block (`MAX_BUBBLES`).
 - **Realistic typing** — a "typing…" indicator with a delay proportional to
