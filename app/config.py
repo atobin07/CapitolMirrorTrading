@@ -72,6 +72,9 @@ class Config:
     meta_graph_version: str
     webhook_host: str
     webhook_port: int
+    # Web storefront
+    store_public_url: str
+    stripe_webhook_secret: str
     business_name: str
     checkout_url: str
     database_path: str
@@ -165,6 +168,8 @@ class Config:
             meta_graph_version=_get("META_GRAPH_VERSION", "v21.0"),
             webhook_host=_get("WEBHOOK_HOST", "0.0.0.0"),
             webhook_port=_get_int("WEBHOOK_PORT", 8080),
+            store_public_url=_get("STORE_PUBLIC_URL", "http://localhost:8080").rstrip("/"),
+            stripe_webhook_secret=_get("STRIPE_WEBHOOK_SECRET"),
             business_name=_get("BUSINESS_NAME", "Your Business"),
             checkout_url=_get("CHECKOUT_URL"),
             database_path=db_path,

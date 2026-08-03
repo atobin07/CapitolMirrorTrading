@@ -61,6 +61,12 @@ class Store:
                 created_at  REAL,
                 PRIMARY KEY (provider, payment_id)
             );
+            -- Secure, unguessable download links issued after a web sale.
+            CREATE TABLE IF NOT EXISTS downloads (
+                token       TEXT PRIMARY KEY,
+                order_id    INTEGER,
+                created_at  REAL
+            );
             -- Digital inventory the bot delivers from. One row = one unique item
             -- (license key, account, link…). state: available|reserved|consumed
             CREATE TABLE IF NOT EXISTS stock (
@@ -256,6 +262,38 @@ class Store:
         return self._conn.execute(
             "SELECT * FROM orders ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
+
+    def order_by_payment_id(self, provider: str, payment_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            "SELECT * FROM orders WHERE provider=? AND payment_id=?",
+            (provider, payment_id),
+        ).fetchone()
+
+    # ── web download tokens ──────────────────────────────────────────────
+    def issue_download(self, order_id: int) -> str:
+        import secrets
+        token = secrets.token_urlsafe(24)
+        self._conn.execute(
+            "INSERT INTO downloads (token, order_id, created_at) VALUES (?, ?, ?)",
+            (token, order_id, time.time()),
+        )
+        self._conn.commit()
+        return token
+
+    def download_for_order(self, order_id: int) -> str | None:
+        row = self._conn.execute(
+            "SELECT token FROM downloads WHERE order_id=? ORDER BY created_at DESC LIMIT 1",
+            (order_id,),
+        ).fetchone()
+        return row["token"] if row else None
+
+    def resolve_download(self, token: str) -> sqlite3.Row | None:
+        """Return the paid order behind a download token (None if invalid)."""
+        return self._conn.execute(
+            "SELECT o.* FROM downloads d JOIN orders o ON o.id = d.order_id "
+            "WHERE d.token = ?",
+            (token,),
+        ).fetchone()
 
     def orders_awaiting_payment(self) -> list[sqlite3.Row]:
         """Open Stripe orders the poller must reconcile against Stripe."""

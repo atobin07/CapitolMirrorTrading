@@ -23,6 +23,7 @@ SUITES = [
     ("Abuse protection (rate limit, injection)", "tests.test_abuse"),
     ("Deep-link attribution (who sent them)", "tests.test_attribution"),
     ("Instagram/Messenger webhook front-end", "tests.test_meta_webhook"),
+    ("Web storefront (checkout + delivery)", "tests.test_webstore"),
     ("End-to-end (full purchase, real code)", "tests.test_e2e"),
 ]
 

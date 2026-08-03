@@ -51,6 +51,13 @@ def main() -> None:
         from app.meta_webhook import run_server
         asyncio.run(run_server(Config.load()))
         return
+    if arg in ("web", "store", "storefront"):
+        import asyncio
+
+        from app.config import Config
+        from app.webstore import run_server
+        asyncio.run(run_server(Config.load()))
+        return
     if arg in ("test", "tests", "proof"):
         from tests.run_all import main as test_main
         raise SystemExit(test_main())
