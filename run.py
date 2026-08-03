@@ -44,6 +44,13 @@ def main() -> None:
     if arg in ("new-client", "newclient"):
         from app.new_client import main as nc_main
         raise SystemExit(nc_main(argv[1:]))
+    if arg in ("instagram", "meta", "webhook"):
+        import asyncio
+
+        from app.config import Config
+        from app.meta_webhook import run_server
+        asyncio.run(run_server(Config.load()))
+        return
     if arg in ("test", "tests", "proof"):
         from tests.run_all import main as test_main
         raise SystemExit(test_main())

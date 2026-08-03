@@ -65,6 +65,13 @@ class Config:
     llm_api_key: str
     llm_model: str
     llm_max_tokens: int
+    # Instagram / Meta DM webhook front-end
+    meta_verify_token: str
+    meta_app_secret: str
+    meta_page_token: str
+    meta_graph_version: str
+    webhook_host: str
+    webhook_port: int
     business_name: str
     checkout_url: str
     database_path: str
@@ -152,6 +159,12 @@ class Config:
             llm_api_key=_get("LLM_API_KEY"),
             llm_model=_get("LLM_MODEL"),
             llm_max_tokens=_get_int("LLM_MAX_TOKENS", 512),
+            meta_verify_token=_get("META_VERIFY_TOKEN"),
+            meta_app_secret=_get("META_APP_SECRET"),
+            meta_page_token=_get("META_PAGE_ACCESS_TOKEN"),
+            meta_graph_version=_get("META_GRAPH_VERSION", "v21.0"),
+            webhook_host=_get("WEBHOOK_HOST", "0.0.0.0"),
+            webhook_port=_get_int("WEBHOOK_PORT", 8080),
             business_name=_get("BUSINESS_NAME", "Your Business"),
             checkout_url=_get("CHECKOUT_URL"),
             database_path=db_path,

@@ -405,6 +405,34 @@ Anyone can find and message the bot, so it's built to handle abuse:
 > at a time. Rate limiting keeps any single user in check, but at high overall
 > volume replies can queue — scale with a smaller/faster model or more compute.
 
+## Selling on Instagram / Messenger DMs
+
+The same engine can answer Instagram & Facebook DMs — sanctioned automation via
+Meta's business messaging (the ManyChat-style path), not a userbot. Run it
+alongside (or instead of) the Telegram bot:
+
+```bash
+python run.py instagram      # starts the webhook server
+```
+
+**How it differs from Telegram:** Meta *pushes* DMs to a public HTTPS webhook, so
+this needs a **domain + TLS** (put nginx/Caddy in front of `WEBHOOK_PORT`).
+Incoming DMs run through the same persona, disclosure, history, and rate limiting;
+replies go out via the Graph API. Selling hands off to a **web checkout link**
+(Instagram has no native in-DM payment), so pair it with a web storefront.
+
+**Meta-side setup (yours to do):**
+1. Convert the account to an **Instagram Professional** account + link a **Facebook Page**.
+2. Create a **Meta app** at developers.facebook.com with Instagram messaging permissions.
+3. Point its webhook at `https://your-domain/webhook`, using a `META_VERIFY_TOKEN`
+   you invent (same value in `.env` and Meta's config).
+4. Set `META_APP_SECRET` and `META_PAGE_ACCESS_TOKEN` in `.env`.
+5. Submit for **App Review** (privacy policy + demo) to message real users.
+
+**Rules to know:** you may auto-reply within a **24-hour window** of the user
+messaging you (no cold DMs), and Meta **bans adult content** — Instagram is a
+mainstream-clients-only channel.
+
 ## Staying compliant
 
 Running this without tripping platform terms comes down to two things: **what
