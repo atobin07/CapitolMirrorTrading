@@ -82,6 +82,13 @@ class Store:
                 chat_id    INTEGER PRIMARY KEY,
                 shown_at   REAL
             );
+            -- First-touch attribution: which link/person sent this customer
+            -- (from a t.me/bot?start=<source> deep link).
+            CREATE TABLE IF NOT EXISTS chat_sources (
+                chat_id    INTEGER PRIMARY KEY,
+                source     TEXT,
+                created_at REAL
+            );
             """
         )
         self._conn.commit()
@@ -139,6 +146,22 @@ class Store:
             (chat_id, time.time()),
         )
         self._conn.commit()
+
+    # ── deep-link attribution (who sent this customer) ───────────────────
+    def set_source(self, chat_id: int, source: str) -> None:
+        """Record first-touch source; keeps the first link that brought them."""
+        self._conn.execute(
+            "INSERT OR IGNORE INTO chat_sources (chat_id, source, created_at) "
+            "VALUES (?, ?, ?)",
+            (chat_id, source, time.time()),
+        )
+        self._conn.commit()
+
+    def get_source(self, chat_id: int) -> str | None:
+        row = self._conn.execute(
+            "SELECT source FROM chat_sources WHERE chat_id = ?", (chat_id,)
+        ).fetchone()
+        return row["source"] if row else None
 
     # ── leads ────────────────────────────────────────────────────────────
     def add_lead(

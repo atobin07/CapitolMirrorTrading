@@ -81,6 +81,9 @@ async def _maybe_disclose(chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> N
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     store.reset(chat_id)
+    # Deep-link attribution: t.me/<bot>?start=<source> arrives as context.args[0].
+    if context.args:
+        store.set_source(chat_id, context.args[0][:64])
     await _maybe_disclose(chat_id, context)
     name = f" {cfg.persona_name} here." if cfg.persona_name else ""
     greeting = f"hey.{name} what's up?"
@@ -126,9 +129,11 @@ async def leads_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def _notify_sellers(context: ContextTypes.DEFAULT_TYPE, update: Update, text: str) -> None:
     username, full_name = _display_name(update)
     who = username or full_name or f"id:{update.effective_chat.id}"
+    source = store.get_source(update.effective_chat.id)
+    via = f"\nVia: {source}" if source else ""
     note = (
         f"🔥 *Hot lead!*\n"
-        f"From: {who}\n"
+        f"From: {who}{via}\n"
         f"Said: {text[:200]}\n\n"
         f"Open the chat to close the sale."
     )

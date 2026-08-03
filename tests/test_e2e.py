@@ -170,7 +170,7 @@ async def main():
     )
 
     fbot = FakeBot()
-    ctx = SimpleNamespace(bot=fbot)
+    ctx = SimpleNamespace(bot=fbot, args=None)
     user = SimpleNamespace(id=CUSTOMER, username="buyer", full_name="Sam Buyer")
 
     # ── seed inventory ───────────────────────────────────────────────────────

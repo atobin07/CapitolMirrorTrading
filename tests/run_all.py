@@ -21,6 +21,7 @@ SUITES = [
     ("Humanize (persona, bubbles, typing)", "tests.test_humanize"),
     ("Compliance (disclosure, terms, honesty)", "tests.test_compliance"),
     ("Abuse protection (rate limit, injection)", "tests.test_abuse"),
+    ("Deep-link attribution (who sent them)", "tests.test_attribution"),
     ("End-to-end (full purchase, real code)", "tests.test_e2e"),
 ]
 

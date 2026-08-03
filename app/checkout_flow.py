@@ -98,6 +98,10 @@ class CheckoutFlow:
     def _who(self, order) -> str:
         return order["username"] or order["full_name"] or f"id:{order['chat_id']}"
 
+    def _via(self, order) -> str:
+        source = self.store.get_source(order["chat_id"])
+        return f" · via {source}" if source else ""
+
     def _is_seller(self, user_id: int) -> bool:
         return user_id in self.cfg.seller_chat_ids
 
@@ -318,7 +322,8 @@ class CheckoutFlow:
             await self._notify_sellers(
                 app,
                 f"💰 *Sale* — Order #{order_id} {order['product_name']} "
-                f"({order['amount']} {order['currency']}) delivered to {self._who(order)}.",
+                f"({order['amount']} {order['currency']}) delivered to "
+                f"{self._who(order)}{self._via(order)}.",
             )
             return
 
@@ -349,7 +354,8 @@ class CheckoutFlow:
         await self._notify_sellers(
             app,
             f"💰 *Sale* — Order #{order_id} {order['product_name']} "
-            f"({order['amount']} {order['currency']}) delivered to {self._who(order)}.\n"
+            f"({order['amount']} {order['currency']}) delivered to "
+            f"{self._who(order)}{self._via(order)}.\n"
             f"Stock left: {remaining}"
             + ("  ⚠️ *restock soon*" if remaining <= 2 else ""),
         )
