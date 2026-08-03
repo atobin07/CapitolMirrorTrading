@@ -53,42 +53,36 @@ async def _check_telegram(cfg: Config) -> bool:
 
 
 async def _check_ollama(cfg: Config) -> bool:
-    client = OllamaClient(cfg.ollama_host, cfg.ollama_model, timeout=15)
+    from app.llm import backend_label, build_llm, uses_openai
+    client = build_llm(cfg)
     try:
         try:
-            async with httpx.AsyncClient(timeout=10) as c:
-                r = await c.get(f"{cfg.ollama_host}/api/tags")
-        except httpx.HTTPError as exc:
-            _fail("Ollama reachable",
-                  f"can't reach {cfg.ollama_host} ({exc}). Is Ollama running? "
-                  "`ollama serve` / check OLLAMA_HOST.")
+            ok = await client.health()
+        except Exception:  # noqa: BLE001
+            ok = False
+        if not ok:
+            if uses_openai(cfg):
+                _fail("LLM API reachable",
+                      f"can't reach {cfg.llm_base_url or '(no LLM_BASE_URL)'} or the "
+                      "key was rejected. Check LLM_BASE_URL / LLM_API_KEY / LLM_MODEL.")
+            else:
+                _fail("Ollama reachable",
+                      f"can't reach {cfg.ollama_host}. Is Ollama running? "
+                      "`ollama serve` / check OLLAMA_HOST, and `ollama pull "
+                      f"{cfg.ollama_model}`.")
             return False
-        if r.status_code != 200:
-            _fail("Ollama reachable", f"{cfg.ollama_host} returned {r.status_code}")
-            return False
-        _ok("Ollama reachable", cfg.ollama_host)
+        _ok("LLM backend", backend_label(cfg))
 
-        if await client.health():
-            _ok("Model available", cfg.ollama_model)
-            model_ok = True
-        else:
-            names = [m.get("name") for m in r.json().get("models", [])]
-            _fail("Model available",
-                  f"'{cfg.ollama_model}' not pulled. Run: ollama pull {cfg.ollama_model}"
-                  + (f"  (have: {', '.join(names)})" if names else ""))
-            model_ok = False
-
-        # Live generation smoke test (only if the model is present).
-        if model_ok:
-            try:
-                reply = await asyncio.wait_for(
-                    client.chat([{"role": "user", "content": "Say 'ready' and nothing else."}]),
-                    timeout=cfg.ollama_timeout,
-                )
-                _ok("Model responds", f'"{reply[:40]}"')
-            except Exception as exc:  # noqa: BLE001
-                _warn("Model responds", f"generation failed/slow: {exc}")
-        return model_ok
+        # Live generation smoke test.
+        try:
+            reply = await asyncio.wait_for(
+                client.chat([{"role": "user", "content": "Say 'ready' and nothing else."}]),
+                timeout=cfg.ollama_timeout,
+            )
+            _ok("Model responds", f'"{reply[:40]}"')
+        except Exception as exc:  # noqa: BLE001
+            _warn("Model responds", f"generation failed/slow: {exc}")
+        return True
     finally:
         await client.close()
 
@@ -202,7 +196,7 @@ async def run_checks() -> int:
     print("\nTelegram")
     tg = await _check_telegram(cfg)
 
-    print("\nBrain (Ollama)")
+    print("\nBrain (LLM)")
     ol = await _check_ollama(cfg)
 
     print("\nProducts")

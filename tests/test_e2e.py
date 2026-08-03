@@ -161,7 +161,7 @@ async def main():
     # Inject the real bot module's globals (same code the live bot runs).
     bot.cfg = cfg
     bot.store = store
-    bot.ollama = FakeOllama()
+    bot.llm = FakeOllama()
     bot.payment_flow = None
     bot.checkout_flow = flow
     bot.system_prompt = build_system_prompt(

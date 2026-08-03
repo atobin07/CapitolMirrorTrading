@@ -59,6 +59,12 @@ class Config:
     ollama_temperature: float
     ollama_num_ctx: int
     ollama_timeout: int
+    # LLM backend: "ollama" (local) or "openai" (any OpenAI-compatible API)
+    llm_backend: str
+    llm_base_url: str
+    llm_api_key: str
+    llm_model: str
+    llm_max_tokens: int
     business_name: str
     checkout_url: str
     database_path: str
@@ -141,6 +147,11 @@ class Config:
             ollama_temperature=_get_float("OLLAMA_TEMPERATURE", 0.6),
             ollama_num_ctx=_get_int("OLLAMA_NUM_CTX", 4096),
             ollama_timeout=_get_int("OLLAMA_TIMEOUT", 120),
+            llm_backend=(_get("LLM_BACKEND", "ollama") or "ollama").lower(),
+            llm_base_url=_get("LLM_BASE_URL").rstrip("/"),
+            llm_api_key=_get("LLM_API_KEY"),
+            llm_model=_get("LLM_MODEL"),
+            llm_max_tokens=_get_int("LLM_MAX_TOKENS", 512),
             business_name=_get("BUSINESS_NAME", "Your Business"),
             checkout_url=_get("CHECKOUT_URL"),
             database_path=db_path,

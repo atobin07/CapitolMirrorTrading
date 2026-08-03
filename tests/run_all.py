@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 SUITES = [
+    ("LLM backend (Ollama / OpenAI-compatible)", "tests.test_llm"),
     ("Payments (PayPal/Square/manual, ledger)", "tests.test_payments"),
     ("Checkout (Stripe + inventory + delivery)", "tests.test_checkout"),
     ("PayPal/Venmo + multi-processor checkout", "tests.test_paypal"),

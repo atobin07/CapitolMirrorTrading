@@ -16,7 +16,8 @@ from telegram.ext import (
 from app import humanize
 from app.checkout_flow import CheckoutFlow
 from app.config import Config
-from app.ollama_client import OllamaClient, OllamaError
+from app.llm import backend_label, build_llm
+from app.ollama_client import OllamaError
 from app.ratelimit import RateLimiter
 from app.payments import build_verifiers
 from app.payments.paypal_gateway import PayPalGateway
@@ -35,7 +36,7 @@ log = logging.getLogger("salesbot")
 # globals keep the handler signatures clean.
 cfg: Config
 store: Store
-ollama: OllamaClient
+llm: object  # OllamaClient or OpenAICompatClient (same interface)
 system_prompt: str
 payment_flow: PaymentFlow | None = None
 checkout_flow: CheckoutFlow | None = None
@@ -177,7 +178,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     messages.append({"role": "user", "content": user_text})
 
     try:
-        reply = await ollama.chat(messages)
+        reply = await llm.chat(messages)
     except OllamaError as exc:
         log.error("Ollama error: %s", exc)
         await update.message.reply_text(
@@ -200,19 +201,19 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def _post_init(app: Application) -> None:
     if checkout_flow is not None:
         await checkout_flow.start(app)
-    healthy = await ollama.health()
+    healthy = await llm.health()
     if healthy:
-        log.info("Ollama reachable; model '%s' is available.", cfg.ollama_model)
+        log.info("LLM backend ready — %s", backend_label(cfg))
     else:
         log.warning(
-            "Ollama model '%s' not found at %s. Pull it with "
-            "`ollama pull %s` or the bot will error on every message.",
-            cfg.ollama_model, cfg.ollama_host, cfg.ollama_model,
+            "LLM backend not reachable — %s. Check your LLM/OLLAMA settings; "
+            "the bot will error on every message until it responds.",
+            backend_label(cfg),
         )
 
 
 async def _post_shutdown(app: Application) -> None:
-    await ollama.close()
+    await llm.close()
     if payment_flow is not None:
         await payment_flow.close()
     if checkout_flow is not None:
@@ -221,7 +222,7 @@ async def _post_shutdown(app: Application) -> None:
 
 
 def main() -> None:
-    global cfg, store, ollama, system_prompt, payment_flow, checkout_flow, rate_limiter
+    global cfg, store, llm, system_prompt, payment_flow, checkout_flow, rate_limiter
     cfg = Config.load()
     rate_limiter = RateLimiter(cfg.rate_limit_per_min)
 
@@ -235,13 +236,7 @@ def main() -> None:
         )
 
     store = Store(cfg.database_path)
-    ollama = OllamaClient(
-        cfg.ollama_host,
-        cfg.ollama_model,
-        temperature=cfg.ollama_temperature,
-        num_ctx=cfg.ollama_num_ctx,
-        timeout=cfg.ollama_timeout,
-    )
+    llm = build_llm(cfg)
     # Prefer autonomous hosted checkout (Stripe and/or PayPal) when configured;
     # otherwise fall back to the manual/paste-ID provider flow.
     if cfg.autonomous_checkout_enabled:
