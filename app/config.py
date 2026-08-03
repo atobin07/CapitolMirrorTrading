@@ -100,6 +100,7 @@ class Config:
     paypal_cancel_url: str
     paypal_enable_venmo: bool
     catalog: dict = field(default_factory=dict)
+    catalog_dir: str = "."
 
     @property
     def stripe_enabled(self) -> bool:
@@ -125,6 +126,8 @@ class Config:
         catalog: dict = {}
         if catalog_path.exists():
             catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        # Product files (PDFs) resolve relative to the catalog's own directory.
+        catalog_dir = str(catalog_path.resolve().parent)
 
         db_path = _get("DATABASE_PATH", "data/leads.db")
         if not os.path.isabs(db_path):
@@ -192,6 +195,7 @@ class Config:
             paypal_cancel_url=_get("PAYPAL_CANCEL_URL", "https://t.me"),
             paypal_enable_venmo=_get_bool("PAYPAL_ENABLE_VENMO", True),
             catalog=catalog,
+            catalog_dir=catalog_dir,
         )
 
     def validate(self) -> list[str]:

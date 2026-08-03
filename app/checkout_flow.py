@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from decimal import Decimal
 
@@ -26,6 +27,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
+from app import products as pdl
 from app.sales import format_price
 
 log = logging.getLogger(__name__)
@@ -83,6 +85,16 @@ class CheckoutFlow:
                 return p
         return None
 
+    def _pname(self, product: dict) -> str:
+        return pdl.product_title(product)
+
+    def _available(self, product: dict) -> bool:
+        """File products are unlimited (as long as the file exists); key/stock
+        products depend on remaining inventory."""
+        if pdl.is_file_product(product):
+            return pdl.file_exists(product, self.cfg.catalog_dir)
+        return self.store.available_count(str(product["id"])) > 0
+
     def _who(self, order) -> str:
         return order["username"] or order["full_name"] or f"id:{order['chat_id']}"
 
@@ -104,9 +116,8 @@ class CheckoutFlow:
             return
         rows = []
         for p in products:
-            n = self.store.available_count(str(p["id"]))
-            label = f"{p['name']} — {format_price(p.get('price'), self.currency)}"
-            if n <= 0:
+            label = f"{self._pname(p)} — {format_price(p.get('price'), self.currency)}"
+            if not self._available(p):
                 label += " (sold out)"
             rows.append([InlineKeyboardButton(label, callback_data=f"buy:{p['id']}")])
         await update.message.reply_text(
@@ -123,9 +134,9 @@ class CheckoutFlow:
             await query.edit_message_text("Sorry, that product is no longer available.")
             return
 
-        if self.store.available_count(str(product_id)) <= 0:
+        if not self._available(product):
             await query.edit_message_text(
-                f"😞 *{product['name']}* is sold out right now. "
+                f"😞 *{self._pname(product)}* isn't available right now. "
                 "Check back soon!",
                 parse_mode="Markdown",
             )
@@ -138,20 +149,22 @@ class CheckoutFlow:
             username=username,
             full_name=user.full_name,
             product_id=str(product_id),
-            product_name=product["name"],
+            product_name=self._pname(product),
             amount=str(product.get("price")),
             currency=self.currency,
         )
 
-        # Hold one item for the duration of the payment window (prevents oversell).
-        reserved = self.store.reserve_stock(str(product_id), order_id)
-        if reserved is None:
-            self.store.set_order_state(order_id, "cancelled", reason="out of stock")
-            await query.edit_message_text(
-                f"😞 *{product['name']}* just sold out. Sorry about that!",
-                parse_mode="Markdown",
-            )
-            return
+        # Unique-key products get one item reserved (prevents oversell). File
+        # products (PDFs) are unlimited, so there's nothing to reserve.
+        if not pdl.is_file_product(product):
+            reserved = self.store.reserve_stock(str(product_id), order_id)
+            if reserved is None:
+                self.store.set_order_state(order_id, "cancelled", reason="out of stock")
+                await query.edit_message_text(
+                    f"😞 *{self._pname(product)}* just sold out. Sorry about that!",
+                    parse_mode="Markdown",
+                )
+                return
 
         providers = list(self.gateways.items())
         # One processor → straight to its checkout. Several → let them choose.
@@ -283,6 +296,33 @@ class CheckoutFlow:
             )
             return
 
+        product = self._product(order["product_id"]) or {}
+
+        # ── file products (PDFs): deliver the document; unlimited stock ──
+        if pdl.is_file_product(product):
+            if not await self._deliver_file(app, order["chat_id"], product, order):
+                self.store.set_order_state(order_id, "paid_no_stock", reason="product file missing")
+                await self._safe_send(
+                    app, order["chat_id"],
+                    "✅ Payment received! Your files are being prepared and will "
+                    "arrive here shortly.",
+                )
+                await self._notify_sellers(
+                    app,
+                    f"🚨 *Order #{order_id} PAID but file missing* "
+                    f"({order['product_name']}) — deliver manually.",
+                )
+                return
+            self.store.set_order_state(order_id, "paid", reason=f"{provider} auto-verified")
+            await self._post_sale(app, order["chat_id"])
+            await self._notify_sellers(
+                app,
+                f"💰 *Sale* — Order #{order_id} {order['product_name']} "
+                f"({order['amount']} {order['currency']}) delivered to {self._who(order)}.",
+            )
+            return
+
+        # ── unique-key / stock products ──
         content = self.store.consume_reserved_stock(order_id)
         if content is None:
             # Should not happen (we reserved up front), but never deliver nothing.
@@ -312,6 +352,32 @@ class CheckoutFlow:
             f"({order['amount']} {order['currency']}) delivered to {self._who(order)}.\n"
             f"Stock left: {remaining}"
             + ("  ⚠️ *restock soon*" if remaining <= 2 else ""),
+        )
+
+    async def _deliver_file(self, app, chat_id, product, order) -> bool:
+        """Send the product's PDF as a Telegram document. Returns success."""
+        path = pdl.resolve_path(product, self.cfg.catalog_dir)
+        if not path or not os.path.isfile(path):
+            log.warning("Product file missing for order %s: %s", order["id"], path)
+            return False
+        try:
+            with open(path, "rb") as fh:
+                await app.bot.send_document(
+                    chat_id, document=fh, filename=os.path.basename(path),
+                    caption=f"✅ Payment confirmed — here's your "
+                            f"{order['product_name']} 🎉",
+                )
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Deliver file failed for order %s: %s", order["id"], exc)
+            return False
+
+    async def _post_sale(self, app, chat_id) -> None:
+        """One casual thank-you + custom-work mention after delivery."""
+        await self._safe_send(
+            app, chat_id,
+            "thanks 🙌 got more whenever you want — and i can do custom pieces "
+            "made to order (runs a bit more). just say the word.",
         )
 
     async def _expire(self, app: Application, order, reason: str) -> None:

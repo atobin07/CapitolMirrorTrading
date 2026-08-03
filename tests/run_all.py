@@ -15,6 +15,7 @@ SUITES = [
     ("Payments (PayPal/Square/manual, ledger)", "tests.test_payments"),
     ("Checkout (Stripe + inventory + delivery)", "tests.test_checkout"),
     ("PayPal/Venmo + multi-processor checkout", "tests.test_paypal"),
+    ("PDF (file) products + delivery", "tests.test_pdf"),
     ("Humanize (persona, bubbles, typing)", "tests.test_humanize"),
     ("Compliance (disclosure, terms, honesty)", "tests.test_compliance"),
     ("Abuse protection (rate limit, injection)", "tests.test_abuse"),

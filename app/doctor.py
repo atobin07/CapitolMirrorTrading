@@ -138,19 +138,25 @@ async def _check_stripe(cfg: Config) -> bool:
 
 
 def _check_inventory(store, cfg: Config) -> None:
+    from app import products as pdl
     products = cfg.catalog.get("products", [])
     if not products:
         return
-    empties = []
     for p in products:
-        n = store.available_count(str(p["id"]))
-        if n <= 0:
-            empties.append(p["name"])
+        name = pdl.product_title(p)
+        if pdl.is_file_product(p):
+            if pdl.file_exists(p, cfg.catalog_dir):
+                _ok(f"File: {name}", str(p.get("file")))
+            else:
+                _fail(f"File: {name}", f"file not found: {p.get('file')} "
+                      f"(relative to {cfg.catalog_dir}). Put the PDF there.")
         else:
-            _ok(f"Stock: {p['name']}", f"{n} available")
-    for name in empties:
-        _warn(f"Stock: {name}", "0 available — load with "
-              "`python run.py stock <id> <file.txt>` or it'll show as sold out.")
+            n = store.available_count(str(p["id"]))
+            if n > 0:
+                _ok(f"Stock: {name}", f"{n} available")
+            else:
+                _warn(f"Stock: {name}", "0 available — load with "
+                      "`python run.py stock <id> <file.txt>` or it shows as sold out.")
 
 
 async def _check_paypal(cfg: Config) -> bool:
